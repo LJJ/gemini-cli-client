@@ -95,6 +95,81 @@ class APIService: ObservableObject {
             }
         }
     }
+    
+    // MARK: - 文件操作功能
+    
+    // 列出目录内容
+    func listDirectory(path: String = ".") async -> DirectoryResponse? {
+        guard let url = URL(string: "\(baseURL)/list-directory?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path)") else { return nil }
+        
+        do {
+            let (data, _) = try await session.data(from: url)
+            return try JSONDecoder().decode(DirectoryResponse.self, from: data)
+        } catch {
+            print("列出目录失败: \(error)")
+            return nil
+        }
+    }
+    
+    // 读取文件内容
+    func readFile(path: String) async -> FileResponse? {
+        guard let url = URL(string: "\(baseURL)/read-file") else { return nil }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body = FileRequest(path: path)
+        request.httpBody = try? JSONEncoder().encode(body)
+        
+        do {
+            let (data, _) = try await session.data(for: request)
+            return try JSONDecoder().decode(FileResponse.self, from: data)
+        } catch {
+            print("读取文件失败: \(error)")
+            return nil
+        }
+    }
+    
+    // 写入文件内容
+    func writeFile(path: String, content: String) async -> FileResponse? {
+        guard let url = URL(string: "\(baseURL)/write-file") else { return nil }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body = FileWriteRequest(path: path, content: content)
+        request.httpBody = try? JSONEncoder().encode(body)
+        
+        do {
+            let (data, _) = try await session.data(for: request)
+            return try JSONDecoder().decode(FileResponse.self, from: data)
+        } catch {
+            print("写入文件失败: \(error)")
+            return nil
+        }
+    }
+    
+    // 执行命令
+    func executeCommand(command: String, cwd: String? = nil) async -> CommandResponse? {
+        guard let url = URL(string: "\(baseURL)/execute-command") else { return nil }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body = CommandRequest(command: command, cwd: cwd)
+        request.httpBody = try? JSONEncoder().encode(body)
+        
+        do {
+            let (data, _) = try await session.data(for: request)
+            return try JSONDecoder().decode(CommandResponse.self, from: data)
+        } catch {
+            print("执行命令失败: \(error)")
+            return nil
+        }
+    }
 }
 
 // 错误类型
