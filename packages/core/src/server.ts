@@ -10,12 +10,19 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { Config } from './config/config.js';
+import { GeminiClient } from './core/client.js';
+import { AuthType, createContentGeneratorConfig } from './core/contentGenerator.js';
+import { getResponseText } from './utils/generateContentResponseUtilities.js';
+import { createToolRegistry } from './config/config.js';
 
 const execAsync = promisify(exec);
 
 export class APIServer {
   private app: express.Application;
   private port: number;
+  private geminiClient?: GeminiClient;
+  private config?: Config;
 
   constructor(port: number = 8080) {
     this.app = express();
@@ -49,7 +56,7 @@ export class APIServer {
       });
     });
 
-    // 聊天功能 - 简化版本，返回模拟响应
+    // 聊天功能 - 连接到真实的 Gemini 服务
     this.app.post('/chat', (req: express.Request, res: express.Response) => {
       this.handleChat(req, res);
     });
@@ -80,6 +87,49 @@ export class APIServer {
     });
   }
 
+  private async initializeGeminiClient() {
+    if (this.geminiClient) {
+      return;
+    }
+
+    try {
+      // 创建配置
+      this.config = new Config({
+        sessionId: `api-server-${Date.now()}`,
+        targetDir: process.cwd(),
+        debugMode: false,
+        cwd: process.cwd(),
+        model: 'gemini-2.0-flash-exp',
+        proxy: process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy,
+      });
+
+      // 初始化工具注册表 - 使用反射来设置私有属性
+      (this.config as any).toolRegistry = await createToolRegistry(this.config);
+
+      // 检查环境变量中的API Key
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        throw new Error('GEMINI_API_KEY or GOOGLE_API_KEY environment variable is required');
+      }
+
+      // 创建内容生成器配置 - 使用API Key认证
+      const contentGeneratorConfig = await createContentGeneratorConfig(
+        'gemini-2.0-flash-exp',
+        AuthType.USE_GEMINI,
+        this.config
+      );
+
+      // 创建 Gemini 客户端
+      this.geminiClient = new GeminiClient(this.config);
+      await this.geminiClient.initialize(contentGeneratorConfig);
+
+      console.log('Gemini client initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize Gemini client:', error);
+      throw error;
+    }
+  }
+
   private async handleChat(req: express.Request, res: express.Response) {
     try {
       const { message, stream = false } = req.body;
@@ -90,32 +140,57 @@ export class APIServer {
 
       console.log('Processing chat request', { message: message.substring(0, 100) });
 
+      // 确保 Gemini 客户端已初始化
+      await this.initializeGeminiClient();
+
+      if (!this.geminiClient) {
+        throw new Error('Gemini client not initialized');
+      }
+
       if (stream) {
         // 流式响应
         res.setHeader('Content-Type', 'text/plain');
         res.setHeader('Transfer-Encoding', 'chunked');
         
-        // 模拟流式响应
-        const response = `这是对"${message}"的模拟响应。\n\n在实际实现中，这里会调用 Gemini API 进行真实的对话。`;
-        const chunks = response.split(' ');
-        
-        for (const chunk of chunks) {
-          res.write(chunk + ' ');
-          await new Promise(resolve => setTimeout(resolve, 100));
+        try {
+          const chat = this.geminiClient.getChat();
+          const streamResponse = await chat.sendMessageStream({ message });
+          
+          for await (const chunk of streamResponse) {
+            const text = getResponseText(chunk);
+            if (text) {
+              res.write(text);
+            }
+          }
+          res.end();
+        } catch (error) {
+          console.error('Stream chat error:', error);
+          res.write(`\n\n错误: ${error instanceof Error ? error.message : '未知错误'}`);
+          res.end();
         }
-        res.end();
       } else {
         // 完整响应
-        const response = `这是对"${message}"的模拟响应。\n\n在实际实现中，这里会调用 Gemini API 进行真实的对话。`;
-        res.json({ 
-          response,
-          timestamp: new Date().toISOString()
-        });
+        try {
+          const chat = this.geminiClient.getChat();
+          const response = await chat.sendMessage({ message });
+          const responseText = getResponseText(response);
+          
+          res.json({ 
+            response: responseText || '',
+            timestamp: new Date().toISOString()
+          });
+        } catch (error) {
+          console.error('Chat error:', error);
+          res.status(500).json({ 
+            error: 'Chat processing failed', 
+            message: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
       }
     } catch (error) {
-      console.error('Chat error:', error);
+      console.error('Chat initialization error:', error);
       res.status(500).json({ 
-        error: 'Chat processing failed', 
+        error: 'Chat initialization failed', 
         message: error instanceof Error ? error.message : 'Unknown error'
       });
     }

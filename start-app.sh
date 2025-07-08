@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# 设置代理（请根据你的代理端口修改）
+export http_proxy=http://127.0.0.1:7890
+export https_proxy=http://127.0.0.1:7890
+
 # Gemini CLI SwiftUI 应用启动脚本
 echo "🚀 启动 Gemini CLI SwiftUI 应用..."
 
