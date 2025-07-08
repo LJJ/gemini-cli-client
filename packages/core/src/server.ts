@@ -10,11 +10,16 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { Config } from './config/config.js';
 import { GeminiClient } from './core/client.js';
 import { AuthType, createContentGeneratorConfig } from './core/contentGenerator.js';
 import { getResponseText } from './utils/generateContentResponseUtilities.js';
 import { createToolRegistry } from './config/config.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const execAsync = promisify(exec);
 
@@ -87,18 +92,21 @@ export class APIServer {
     });
   }
 
-  private async initializeGeminiClient() {
-    if (this.geminiClient) {
-      return;
-    }
+  private async initializeGeminiClient(workspacePath?: string) {
+    // 每次都重新初始化客户端以确保工作目录正确
+    this.geminiClient = undefined;
+    this.config = undefined;
 
     try {
       // 创建配置
+      const workspaceDir = workspacePath || process.env.GEMINI_WORKSPACE || process.env.HOME || '/Users/libmac';
+      console.log('Setting workspace directory to:', workspaceDir);
+      
       this.config = new Config({
         sessionId: `api-server-${Date.now()}`,
-        targetDir: process.cwd(),
+        targetDir: workspaceDir, // 使用传入的工作目录
         debugMode: false,
-        cwd: process.cwd(),
+        cwd: workspaceDir, // 使用传入的工作目录
         model: 'gemini-2.0-flash-exp',
         proxy: process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy,
       });
@@ -132,19 +140,42 @@ export class APIServer {
 
   private async handleChat(req: express.Request, res: express.Response) {
     try {
-      const { message, stream = false } = req.body;
+      const { message, stream = false, filePaths = [], workspacePath } = req.body;
       
       if (!message) {
         return res.status(400).json({ error: 'Message is required' });
       }
 
-      console.log('Processing chat request', { message: message.substring(0, 100) });
+      console.log('Processing chat request', { 
+        message: message.substring(0, 100),
+        filePaths: filePaths.length,
+        workspacePath
+      });
 
-      // 确保 Gemini 客户端已初始化
-      await this.initializeGeminiClient();
+      // 根据 workspacePath 重新初始化 Gemini 客户端
+      await this.initializeGeminiClient(workspacePath);
 
       if (!this.geminiClient) {
         throw new Error('Gemini client not initialized');
+      }
+
+      // 构建完整的消息内容
+      let fullMessage = message;
+      
+      console.log('Original message:', message);
+      console.log('File paths is array:', Array.isArray(filePaths));
+      
+      // 如果有文件路径，将文件路径信息添加到消息中，让 Gemini 模型通过工具调用来读取文件
+      if (filePaths && filePaths.length > 0) {
+        console.log('File paths length:', filePaths.length);
+        
+        const filePathsText = filePaths.map((p: string) => `@${p}`).join(' ');
+        console.log('Generated filePathsText:', filePathsText);
+        
+        fullMessage = `${message}\n${filePathsText}`;
+        console.log('Updated message with file paths:', fullMessage);
+      } else {
+        console.log('No file paths to process');
       }
 
       if (stream) {
@@ -154,7 +185,7 @@ export class APIServer {
         
         try {
           const chat = this.geminiClient.getChat();
-          const streamResponse = await chat.sendMessageStream({ message });
+          const streamResponse = await chat.sendMessageStream({ message: fullMessage });
           
           for await (const chunk of streamResponse) {
             const text = getResponseText(chunk);
@@ -172,7 +203,7 @@ export class APIServer {
         // 完整响应
         try {
           const chat = this.geminiClient.getChat();
-          const response = await chat.sendMessage({ message });
+          const response = await chat.sendMessage({ message: fullMessage });
           const responseText = getResponseText(response);
           
           res.json({ 

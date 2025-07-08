@@ -45,14 +45,14 @@ class APIService: ObservableObject {
     }
     
     // 发送聊天消息
-    func sendMessage(_ text: String) async -> ChatResponse? {
+    func sendMessage(_ text: String, filePaths: [String] = [], workspacePath: String? = nil) async -> ChatResponse? {
         guard let url = URL(string: "\(baseURL)/chat") else { return nil }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body = ChatRequest(message: text, stream: false)
+        let body = ChatRequest(message: text, stream: false, filePaths: filePaths, workspacePath: workspacePath)
         request.httpBody = try? JSONEncoder().encode(body)
         
         do {
@@ -65,7 +65,7 @@ class APIService: ObservableObject {
     }
     
     // 流式发送消息
-    func sendMessageStream(_ text: String) async -> AsyncThrowingStream<String, Error> {
+    func sendMessageStream(_ text: String, filePaths: [String] = [], workspacePath: String? = nil) async -> AsyncThrowingStream<String, Error> {
         return AsyncThrowingStream { continuation in
             Task {
                 guard let url = URL(string: "\(baseURL)/chat") else {
@@ -77,7 +77,7 @@ class APIService: ObservableObject {
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 
-                let body = ChatRequest(message: text, stream: true)
+                let body = ChatRequest(message: text, stream: true, filePaths: filePaths, workspacePath: workspacePath)
                 request.httpBody = try? JSONEncoder().encode(body)
                 
                 do {

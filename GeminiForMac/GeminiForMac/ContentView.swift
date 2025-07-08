@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var chatService = ChatService()
+    @StateObject private var fileExplorerService = FileExplorerService()
     @State private var messageText = ""
     @FocusState private var isTextFieldFocused: Bool
     @State private var showFileExplorer = true
@@ -18,6 +19,7 @@ struct ContentView: View {
             // 文件浏览器侧边栏
             if showFileExplorer {
                 FileExplorerView()
+                    .environmentObject(fileExplorerService)
                     .transition(.move(edge: .leading))
             }
             
@@ -126,22 +128,49 @@ struct ContentView: View {
                 }
                 
                 // 输入区域
-                HStack(spacing: 12) {
-                    TextField("输入消息...", text: $messageText, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($isTextFieldFocused)
-                        .lineLimit(1...5)
-                        .onSubmit {
-                            sendMessage()
+                VStack(spacing: 8) {
+                    // 选中文件信息
+                    if !fileExplorerService.selectedFiles.isEmpty {
+                        HStack {
+                            Image(systemName: "doc.on.doc")
+                                .foregroundColor(.blue)
+                            Text("已选择 \(fileExplorerService.selectedFiles.count) 个文件")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            
+                            Spacer()
+                            
+                            Button("清空选择") {
+                                fileExplorerService.clearSelection()
+                            }
+                            .buttonStyle(.plain)
+                            .font(.caption)
+                            .foregroundColor(.red)
                         }
-                    
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .blue)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(6)
                     }
-                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || chatService.isLoading)
-                    .buttonStyle(.plain)
+                    
+                    // 消息输入
+                    HStack(spacing: 12) {
+                        TextField("输入消息...", text: $messageText, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .focused($isTextFieldFocused)
+                            .lineLimit(1...5)
+                            .onSubmit {
+                                sendMessage()
+                            }
+                        
+                        Button(action: sendMessage) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .blue)
+                        }
+                        .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || chatService.isLoading)
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -164,7 +193,11 @@ struct ContentView: View {
         isTextFieldFocused = false
         
         Task {
-            await chatService.sendMessage(text)
+            // 获取选中的文件路径
+            let selectedFilePaths = Array(fileExplorerService.selectedFiles)
+            
+            // 发送消息（包含文件路径和工作目录）
+            await chatService.sendMessage(text, filePaths: selectedFilePaths, workspacePath: fileExplorerService.currentPath)
         }
     }
 }

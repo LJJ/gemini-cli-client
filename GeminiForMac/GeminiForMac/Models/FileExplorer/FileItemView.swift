@@ -11,28 +11,38 @@ import SwiftUI
 struct FileItemView: View {
     let item: DirectoryItem
     let isSelected: Bool
+    let isMultiSelected: Bool
     let isExpanded: Bool
+    let isMultiSelectMode: Bool
     let onTap: () -> Void
     let onDoubleTap: () -> Void
     let onToggleExpansion: () -> Void
     
     var body: some View {
         HStack(spacing: 4) {
-            // 展开/折叠按钮（仅对文件夹）
-            if item.type == "directory" {
-                Button(action: onToggleExpansion) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+            // 多选指示器（仅在多选模式且为文件时显示）
+            if isMultiSelectMode && item.type == "file" {
+                Image(systemName: isMultiSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.caption2)
+                    .foregroundColor(isMultiSelected ? .blue : .secondary)
+                    .frame(width: 12, height: 12)
+            } else {
+                // 展开/折叠按钮（仅对文件夹）
+                if item.type == "directory" {
+                    Button(action: onToggleExpansion) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .frame(width: 12, height: 12)
+                    }
+                    .buttonStyle(.plain)
+                    .allowsHitTesting(true)
+                } else {
+                    // 文件占位符
+                    Rectangle()
+                        .fill(Color.clear)
                         .frame(width: 12, height: 12)
                 }
-                .buttonStyle(.plain)
-                .allowsHitTesting(true)
-            } else {
-                // 文件占位符
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: 12, height: 12)
             }
             
             // 文件图标和名称区域
@@ -67,7 +77,18 @@ struct FileItemView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .background(backgroundColor)
+    }
+    
+    // 背景颜色
+    private var backgroundColor: Color {
+        if isMultiSelectMode && isMultiSelected {
+            return Color.blue.opacity(0.2)
+        } else if isSelected {
+            return Color.blue.opacity(0.1)
+        } else {
+            return Color.clear
+        }
     }
     
     // 根据文件类型返回图标名称

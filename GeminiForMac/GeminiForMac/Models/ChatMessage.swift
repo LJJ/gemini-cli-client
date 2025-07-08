@@ -37,6 +37,8 @@ struct StatusResponse: Codable {
 struct ChatRequest: Codable {
     let message: String
     let stream: Bool?
+    let filePaths: [String]?
+    let workspacePath: String?
 }
 
 // MARK: - 文件操作相关

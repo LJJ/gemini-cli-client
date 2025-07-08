@@ -17,6 +17,10 @@ class FileExplorerService: ObservableObject {
     @Published var selectedItem: DirectoryItem?
     @Published var expandedFolders: Set<String> = []
     
+    // 多选功能
+    @Published var selectedFiles: Set<String> = [] // 存储选中文件的路径
+    @Published var isMultiSelectMode = false
+    
     private let apiService = APIService()
     
     // 路径历史记录
@@ -95,6 +99,45 @@ class FileExplorerService: ObservableObject {
     func selectDirectory(_ item: DirectoryItem) {
         guard item.type == "directory" else { return }
         selectedItem = item
+    }
+    
+    // MARK: - 多选功能
+    
+    // 切换多选模式
+    func toggleMultiSelectMode() {
+        isMultiSelectMode.toggle()
+        if !isMultiSelectMode {
+            // 退出多选模式时清空选择
+            selectedFiles.removeAll()
+        }
+    }
+    
+    // 切换文件选择状态
+    func toggleFileSelection(_ item: DirectoryItem) {
+        guard item.type == "file" else { return }
+        
+        if selectedFiles.contains(item.path) {
+            selectedFiles.remove(item.path)
+        } else {
+            selectedFiles.insert(item.path)
+        }
+    }
+    
+    // 检查文件是否被选中
+    func isFileSelected(_ item: DirectoryItem) -> Bool {
+        return selectedFiles.contains(item.path)
+    }
+    
+    // 清空所有选择
+    func clearSelection() {
+        selectedFiles.removeAll()
+    }
+    
+    // 获取选中的文件列表
+    var selectedFileItems: [DirectoryItem] {
+        return items.filter { item in
+            item.type == "file" && selectedFiles.contains(item.path)
+        }
     }
     
     // 切换文件夹展开状态

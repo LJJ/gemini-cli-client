@@ -13,15 +13,33 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-# 检查是否在正确的目录
-if [ ! -f "packages/core/package.json" ]; then
-    echo "❌ 错误: 请在 gemini-cli 项目根目录下运行此脚本"
+# 设置项目路径
+PROJECT_PATH="$HOME/workplace/AI/gemini-cli"
+
+# 检查项目是否存在
+if [ ! -d "$PROJECT_PATH" ]; then
+    echo "❌ 错误: 未找到 gemini-cli 项目，请检查路径: $PROJECT_PATH"
     exit 1
 fi
+
+# 检查项目结构
+if [ ! -f "$PROJECT_PATH/packages/core/package.json" ]; then
+    echo "❌ 错误: 项目结构不正确，请检查: $PROJECT_PATH"
+    exit 1
+fi
+
+# 切换到项目目录
+echo "📁 切换到项目目录: $PROJECT_PATH"
+cd "$PROJECT_PATH"
 
 # 启动后端服务器
 echo "📡 启动后端 API 服务器..."
 cd packages/core
+
+# 设置工作目录为用户主目录，这样 Gemini 可以访问所有用户文件
+export GEMINI_WORKSPACE="$HOME"
+echo "🏠 设置工作目录为: $GEMINI_WORKSPACE"
+
 npm run start:server &
 SERVER_PID=$!
 
@@ -40,8 +58,8 @@ fi
 
 # 打开 macOS 应用
 echo "🖥️  打开 macOS 应用..."
-if [ -d "GeminiForMac" ]; then
-    open GeminiForMac/GeminiForMac.xcodeproj
+if [ -d "$PROJECT_PATH/GeminiForMac" ]; then
+    open "$PROJECT_PATH/GeminiForMac/GeminiForMac.xcodeproj"
     echo "✅ Xcode 项目已打开，请按 Cmd+R 运行应用"
 else
     echo "⚠️  未找到 GeminiForMac 项目，请手动打开 Xcode 项目"

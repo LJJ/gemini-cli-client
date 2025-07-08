@@ -30,16 +30,28 @@ struct MessageView: View {
                     .foregroundColor(.secondary)
                 
                 // 消息文本
-                Text(message.content)
-                    .font(.body)
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(message.isUser ? Color.blue.opacity(0.1) : Color.green.opacity(0.1))
-                    )
-                    .textSelection(.enabled)
+                if message.isUser {
+                    // 用户消息使用普通文本
+                    Text(message.content)
+                        .font(.body)
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.blue.opacity(0.1))
+                        )
+                        .textSelection(.enabled)
+                } else {
+                    // Gemini 回复使用 Markdown 渲染
+                    MarkdownTextView(text: message.content)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.green.opacity(0.1))
+                        )
+                }
                 
                 // 时间戳
                 Text(message.timestamp, style: .time)

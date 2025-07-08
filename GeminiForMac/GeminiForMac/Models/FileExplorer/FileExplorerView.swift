@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct FileExplorerView: View {
-    @StateObject private var fileExplorerService = FileExplorerService()
+    @EnvironmentObject var fileExplorerService: FileExplorerService
     @State private var searchText = ""
     
     var body: some View {
@@ -58,6 +58,17 @@ struct FileExplorerView: View {
                 
                 Spacer()
                 
+                // 多选模式切换按钮
+                Button(action: {
+                    fileExplorerService.toggleMultiSelectMode()
+                }) {
+                    Image(systemName: fileExplorerService.isMultiSelectMode ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(.caption)
+                        .foregroundColor(fileExplorerService.isMultiSelectMode ? .blue : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(fileExplorerService.isMultiSelectMode ? "退出多选模式" : "进入多选模式")
+                
                 // 标题
                 Text("文件浏览器")
                     .font(.caption)
@@ -69,6 +80,35 @@ struct FileExplorerView: View {
             .background(Color(NSColor.controlBackgroundColor))
             
             Divider()
+            
+            // 多选状态显示
+            if fileExplorerService.isMultiSelectMode {
+                HStack {
+                    Text("多选模式")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                    
+                    Spacer()
+                    
+                    Text("\(fileExplorerService.selectedFiles.count) 个文件已选择")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    
+                    if !fileExplorerService.selectedFiles.isEmpty {
+                        Button("清空") {
+                            fileExplorerService.clearSelection()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Color.blue.opacity(0.1))
+                
+                Divider()
+            }
             
             // 搜索框
             HStack {
@@ -147,17 +187,27 @@ struct FileExplorerView: View {
                             FileItemView(
                                 item: item,
                                 isSelected: fileExplorerService.selectedItem?.id == item.id,
-                                isExpanded: fileExplorerService.expandedFolders.contains(item.path)
+                                isMultiSelected: fileExplorerService.isFileSelected(item),
+                                isExpanded: fileExplorerService.expandedFolders.contains(item.path),
+                                isMultiSelectMode: fileExplorerService.isMultiSelectMode
                             ) {
-                                // 单击：选择项目
-                                if item.type == "directory" {
-                                    fileExplorerService.selectDirectory(item)
+                                // 单击处理
+                                if fileExplorerService.isMultiSelectMode {
+                                    // 多选模式：切换文件选择状态
+                                    if item.type == "file" {
+                                        fileExplorerService.toggleFileSelection(item)
+                                    }
                                 } else {
-                                    fileExplorerService.selectFile(item)
+                                    // 单选模式：选择项目
+                                    if item.type == "directory" {
+                                        fileExplorerService.selectDirectory(item)
+                                    } else {
+                                        fileExplorerService.selectFile(item)
+                                    }
                                 }
                             } onDoubleTap: {
-                                // 双击：进入目录（仅对文件夹）
-                                if item.type == "directory" {
+                                // 双击：进入目录（仅对文件夹，且不在多选模式）
+                                if item.type == "directory" && !fileExplorerService.isMultiSelectMode {
                                     fileExplorerService.navigateToDirectory(item)
                                 }
                             } onToggleExpansion: {
@@ -184,7 +234,7 @@ struct FileExplorerView: View {
     }
 }
 
-
 #Preview {
     FileExplorerView()
+        .environmentObject(FileExplorerService())
 }
