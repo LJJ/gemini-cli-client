@@ -10,69 +10,20 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var chatService = ChatService()
     @StateObject private var fileExplorerService = FileExplorerService()
+    @StateObject private var authService = AuthService()
     @State private var messageText = ""
     @FocusState private var isTextFieldFocused: Bool
-    @State private var showFileExplorer = true
     
     var body: some View {
-        HStack(spacing: 0) {
-            // 文件浏览器侧边栏
-            if showFileExplorer {
-                FileExplorerView()
-                    .environmentObject(fileExplorerService)
-                    .transition(.move(edge: .leading))
-            }
+        HSplitView {
+            // 文件浏览器
+            FileExplorerView()
+                .environmentObject(fileExplorerService)
+                .frame(minWidth: 200, maxWidth: 400)
             
-            // 主聊天区域
+            // 聊天界面
             VStack(spacing: 0) {
-                // 顶部状态栏
-                HStack {
-                    // 文件浏览器切换按钮
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showFileExplorer.toggle()
-                        }
-                    }) {
-                        Image(systemName: showFileExplorer ? "sidebar.left" : "sidebar.left.slash")
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    // 连接状态指示器
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(chatService.isConnected ? Color.green : Color.red)
-                            .frame(width: 8, height: 8)
-                        Text(chatService.isConnected ? "已连接" : "未连接")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    // 标题
-                    Text("Gemini CLI")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                    
-                    Spacer()
-                    
-                    // 清除按钮
-                    Button(action: {
-                        chatService.clearMessages()
-                    }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(NSColor.controlBackgroundColor))
-                
-                Divider()
-                
-                // 聊天区域
+                // 聊天消息列表
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -80,80 +31,49 @@ struct ContentView: View {
                                 MessageView(message: message)
                                     .id(message.id)
                             }
-                            
-                            // 加载指示器
-                            if chatService.isLoading {
-                                HStack {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
-                                    Text("正在思考...")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding()
-                            }
                         }
+                        .padding(.vertical, 8)
                     }
                     .onChange(of: chatService.messages.count) { _ in
                         if let lastMessage = chatService.messages.last {
-                            withAnimation(.easeOut(duration: 0.3)) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
                         }
                     }
                 }
                 
-                Divider()
-                
                 // 错误消息
                 if let errorMessage = chatService.errorMessage {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.red)
                         Text(errorMessage)
+                            .foregroundColor(.red)
                             .font(.caption)
-                            .foregroundColor(.secondary)
                         Spacer()
-                        Button("重试") {
-                            Task {
-                                await chatService.checkConnection()
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .font(.caption)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.orange.opacity(0.1))
+                    .background(Color.red.opacity(0.1))
+                }
+                
+                // 加载状态
+                if chatService.isLoading {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("正在处理...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                 }
                 
                 // 输入区域
                 VStack(spacing: 8) {
-                    // 选中文件信息
-                    if !fileExplorerService.selectedFiles.isEmpty {
-                        HStack {
-                            Image(systemName: "doc.on.doc")
-                                .foregroundColor(.blue)
-                            Text("已选择 \(fileExplorerService.selectedFiles.count) 个文件")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                            
-                            Spacer()
-                            
-                            Button("清空选择") {
-                                fileExplorerService.clearSelection()
-                            }
-                            .buttonStyle(.plain)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(6)
-                    }
-                    
-                    // 消息输入
                     HStack(spacing: 12) {
                         TextField("输入消息...", text: $messageText, axis: .vertical)
                             .textFieldStyle(.roundedBorder)
@@ -181,6 +101,30 @@ struct ContentView: View {
         .onAppear {
             Task {
                 await chatService.checkConnection()
+            }
+        }
+        // 认证对话框
+        .sheet(isPresented: $authService.showAuthDialog) {
+            AuthDialogView(authService: authService)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        // 工具确认对话框
+        .sheet(isPresented: $chatService.showToolConfirmation) {
+            if let confirmation = chatService.pendingToolConfirmation {
+                ToolConfirmationView(
+                    confirmation: confirmation,
+                    onConfirm: { outcome in
+                        Task {
+                            await chatService.handleToolConfirmation(outcome: outcome)
+                        }
+                    },
+                    onCancel: {
+                        chatService.cancelToolConfirmation()
+                    }
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
         }
     }

@@ -14,6 +14,8 @@ class ChatService: ObservableObject {
     @Published var isConnected = false
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var pendingToolConfirmation: ToolConfirmationEvent?
+    @Published var showToolConfirmation = false
     
     private let apiService = APIService()
     
@@ -56,31 +58,41 @@ class ChatService: ObservableObject {
         errorMessage = nil
         
         do {
-            // 尝试流式响应
+            // 使用流式响应（默认启用）
             let stream = await apiService.sendMessageStream(text, filePaths: filePaths, workspacePath: workspacePath)
             var responseContent = ""
+            var hasCreatedResponseMessage = false
             
             for try await chunk in stream {
+                // 尝试解析结构化事件
+                if let event = parseStructuredEvent(chunk) {
+                    handleStructuredEvent(event)
+                    continue
+                }
+                
+                // 如果不是结构化事件，作为普通文本内容处理
                 responseContent += chunk
                 
-                // 更新最后一条消息或创建新消息
-                if let lastMessage = messages.last, !lastMessage.isUser {
-                    // 更新现有响应消息
-                    messages[messages.count - 1] = ChatMessage(
-                        content: responseContent,
-                        isUser: false,
-                        timestamp: lastMessage.timestamp
-                    )
-                } else {
-                    // 创建新的响应消息
+                // 创建或更新响应消息
+                if !hasCreatedResponseMessage {
                     messages.append(ChatMessage(
                         content: responseContent,
                         isUser: false
                     ))
+                    hasCreatedResponseMessage = true
+                } else {
+                    // 更新最后一条消息
+                    if let lastIndex = messages.indices.last {
+                        messages[lastIndex] = ChatMessage(
+                            content: responseContent,
+                            isUser: false,
+                            timestamp: messages[lastIndex].timestamp
+                        )
+                    }
                 }
             }
             
-            // 如果流式响应失败，尝试普通响应
+            // 如果流式响应为空，尝试普通响应
             if responseContent.isEmpty {
                 if let response = await apiService.sendMessage(text, filePaths: filePaths, workspacePath: workspacePath) {
                     messages.append(ChatMessage(
@@ -96,6 +108,152 @@ class ChatService: ObservableObject {
         }
         
         isLoading = false
+    }
+    
+    // 解析结构化事件
+    private func parseStructuredEvent(_ chunk: String) -> StreamEvent? {
+        guard let data = chunk.data(using: .utf8) else { return nil }
+        
+        do {
+            let event = try JSONDecoder().decode(StreamEvent.self, from: data)
+            return event
+        } catch {
+            // 如果不是有效的JSON，返回nil
+            return nil
+        }
+    }
+    
+    // 处理结构化事件
+    private func handleStructuredEvent(_ event: StreamEvent) {
+        switch event.data {
+        case .content(let text):
+            // 处理文本内容
+            if let lastIndex = messages.indices.last {
+                messages[lastIndex] = ChatMessage(
+                    content: messages[lastIndex].content + text,
+                    isUser: false,
+                    timestamp: messages[lastIndex].timestamp
+                )
+            } else {
+                messages.append(ChatMessage(content: text, isUser: false))
+            }
+            
+        case .toolCall(let data):
+            // 处理工具调用
+            let toolMessage = ChatMessage(
+                content: "🔧 正在调用工具: \(data.displayName)",
+                isUser: false
+            )
+            messages.append(toolMessage)
+            
+        case .toolExecution(let data):
+            // 处理工具执行状态
+            let statusMessage = ChatMessage(
+                content: "⚡ \(data.message)",
+                isUser: false
+            )
+            messages.append(statusMessage)
+            
+        case .toolResult(let data):
+            // 处理工具执行结果
+            let resultMessage = ChatMessage(
+                content: data.displayResult,
+                isUser: false
+            )
+            messages.append(resultMessage)
+            
+        case .toolConfirmation(let data):
+            // 处理工具确认请求
+            let confirmationEvent = ToolConfirmationEvent(
+                type: "tool_confirmation",
+                callId: data.callId,
+                toolName: data.name,
+                confirmationDetails: ToolConfirmationDetails(
+                    type: .exec,
+                    title: "需要确认工具调用: \(data.displayName)",
+                    command: data.command,
+                    rootCommand: nil,
+                    fileName: nil,
+                    fileDiff: nil,
+                    prompt: data.prompt,
+                    urls: nil,
+                    serverName: nil,
+                    toolName: data.name,
+                    toolDisplayName: data.displayName
+                )
+            )
+            pendingToolConfirmation = confirmationEvent
+            showToolConfirmation = true
+            
+        case .error(let errorText):
+            // 处理错误
+            self.errorMessage = errorText
+            
+        case .complete(let success):
+            // 处理完成事件
+            if success {
+                let completeMessage = ChatMessage(
+                    content: "✅ 操作完成",
+                    isUser: false
+                )
+                messages.append(completeMessage)
+            }
+        }
+    }
+    
+
+    
+    // 处理工具确认
+    func handleToolConfirmation(outcome: ToolConfirmationOutcome) async {
+        guard let confirmation = pendingToolConfirmation else { return }
+        
+        // 添加确认消息
+        let confirmationMessage = ChatMessage(
+            content: "✅ 已确认工具调用: \(confirmation.toolName)",
+            isUser: false
+        )
+        messages.append(confirmationMessage)
+        
+        // 发送确认到服务器
+        if let response = await apiService.sendToolConfirmation(
+            callId: confirmation.callId,
+            outcome: outcome
+        ) {
+            if response.success {
+                // 添加成功消息
+                let successMessage = ChatMessage(
+                    content: "🔄 正在执行工具调用...",
+                    isUser: false
+                )
+                messages.append(successMessage)
+                
+                // 等待一段时间，让服务器处理工具调用
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1秒
+                
+                // 更新消息状态
+                if let lastIndex = messages.indices.last {
+                    messages[lastIndex] = ChatMessage(
+                        content: "✅ 工具调用执行完成",
+                        isUser: false,
+                        timestamp: messages[lastIndex].timestamp
+                    )
+                }
+            } else {
+                errorMessage = "确认操作失败: \(response.message)"
+            }
+        } else {
+            errorMessage = "发送确认失败，请检查网络连接。"
+        }
+        
+        // 清除确认状态
+        pendingToolConfirmation = nil
+        showToolConfirmation = false
+    }
+    
+    // 取消工具确认
+    func cancelToolConfirmation() {
+        pendingToolConfirmation = nil
+        showToolConfirmation = false
     }
     
     // 发送消息（重载，兼容原有调用）
