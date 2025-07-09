@@ -366,15 +366,26 @@ export class AuthService {
     }
   }
 
-  public async getContentGeneratorConfig() {
+  public async getContentGeneratorConfig(disableCodeAssist: boolean = false) {
     if (!this.currentAuthType) {
       throw new Error('未设置认证类型');
     }
 
-    return await createContentGeneratorConfig(
+    const config = await createContentGeneratorConfig(
       'gemini-2.0-flash-exp',
       this.currentAuthType
     );
+
+    // 如果禁用 CodeAssist，移除相关配置
+    if (disableCodeAssist) {
+      console.log('禁用 CodeAssist 配置');
+      return {
+        ...config,
+        codeAssist: undefined
+      };
+    }
+
+    return config;
   }
 
   public isUserAuthenticated(): boolean {

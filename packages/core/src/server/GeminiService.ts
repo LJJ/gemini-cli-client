@@ -13,6 +13,7 @@ import { createContentGeneratorConfig, AuthType } from '../core/contentGenerator
 import { AuthService } from './AuthService.js';
 import express from 'express';
 import { ResponseFactory } from './utils/responseFactory.js';
+import { StreamingEventFactory, StreamingEvent } from './types/streaming-events.js';
 
 export class GeminiService {
   private geminiClient: GeminiClient | null = null;
@@ -59,7 +60,29 @@ export class GeminiService {
 
       // 创建 Gemini 客户端
       this.geminiClient = new GeminiClient(this.config);
-      await this.geminiClient.initialize(contentGeneratorConfig);
+      
+      try {
+        // 尝试初始化 CodeAssist
+        console.log('尝试初始化 CodeAssist...');
+        await this.geminiClient.initialize(contentGeneratorConfig);
+        console.log('CodeAssist 初始化成功');
+      } catch (codeAssistError) {
+        console.warn('CodeAssist 初始化失败，降级到普通 Gemini API:', codeAssistError);
+        
+        // 如果 CodeAssist 初始化失败，尝试使用普通的 Gemini API
+        try {
+          console.log('尝试使用普通 Gemini API...');
+          
+          // 获取不包含 CodeAssist 的配置
+          const fallbackConfig = await this.authService.getContentGeneratorConfig(true);
+          
+          await this.geminiClient.initialize(fallbackConfig);
+          console.log('普通 Gemini API 初始化成功');
+        } catch (fallbackError) {
+          console.error('普通 Gemini API 也初始化失败:', fallbackError);
+          throw new Error(`Gemini 客户端初始化失败: ${fallbackError instanceof Error ? fallbackError.message : '未知错误'}`);
+        }
+      }
 
       console.log('Gemini client initialized successfully');
     } catch (error) {
@@ -70,7 +93,7 @@ export class GeminiService {
 
   public async handleChat(req: express.Request, res: express.Response) {
     try {
-      const { message, stream = false, filePaths = [], workspacePath } = req.body;
+      const { message, filePaths = [], workspacePath } = req.body;
       
       if (!message) {
         return res.status(400).json(ResponseFactory.validationError('message', 'Message is required'));
@@ -108,93 +131,10 @@ export class GeminiService {
         console.log('No file paths to process');
       }
 
-      if (stream) {
-        // 使用 gemini-cli 的 Turn 类处理流式响应
-        await this.handleStreamingChat(fullMessage, res);
-      } else {
-        // 完整响应
-        try {
-          console.log('=== 开始发送消息到 Gemini ===');
-          console.log('发送的消息内容:', fullMessage);
-          
-          const chat = this.geminiClient.getChat();
-          
-          // 获取工具注册表
-          const toolRegistry = await this.config!.getToolRegistry();
-          
-          // 获取工具声明
-          const functionDeclarations = toolRegistry.getFunctionDeclarations();
-          console.log('工具声明数量:', functionDeclarations.length);
-          
-          // 统一的消息发送处理
-          console.log('发送消息到 Gemini...');
-          
-          const response = await chat.sendMessage({ 
-            message: fullMessage,
-            config: {
-              tools: functionDeclarations.length > 0 ? [
-                { functionDeclarations },
-              ] : undefined,
-            },
-          });
-          
-          console.log('=== Gemini 响应完成 ===');
-          console.log('响应类型:', typeof response);
-          console.log('响应内容:', response);
-          
-          // 检查是否有工具调用
-          const functionCalls = response.functionCalls || [];
-          console.log('直接的工具调用:', functionCalls);
-          
-          // 还需要检查 candidates 中的工具调用
-          const candidateFunctionCalls: any[] = [];
-          if (response.candidates && response.candidates.length > 0) {
-            const content = response.candidates[0].content;
-            if (content && content.parts) {
-              for (const part of content.parts) {
-                if (part.functionCall) {
-                  candidateFunctionCalls.push(part.functionCall);
-                }
-              }
-            }
-          }
-          console.log('从 candidates 中提取的工具调用:', candidateFunctionCalls);
-          
-          const allFunctionCalls = [...functionCalls, ...candidateFunctionCalls];
-          console.log('所有工具调用:', allFunctionCalls);
-          console.log('工具调用数量:', allFunctionCalls.length);
-          
-          if (allFunctionCalls.length > 0) {
-            console.log(`发现 ${allFunctionCalls.length} 个工具调用，需要执行工具`);
-            console.log('工具调用详情:', allFunctionCalls);
-            
-            // 执行工具调用
-            const toolResults = await this.executeToolCalls(allFunctionCalls);
-            
-            // 将工具结果发送回 Gemini
-            const finalResponse = await chat.sendMessage({
-              message: toolResults,
-              config: {
-                tools: [
-                  { functionDeclarations: toolRegistry.getFunctionDeclarations() },
-                ],
-              },
-            });
-            
-            const finalResponseText = this.getResponseText(finalResponse);
-            
-            res.json(ResponseFactory.chat(finalResponseText || '工具执行完成，但没有获得文本响应', true));
-          } else {
-            console.log('没有发现工具调用，直接返回响应');
-            // 没有工具调用，直接返回响应
-            const responseText = this.getResponseText(response);
-            
-            res.json(ResponseFactory.chat(responseText || 'No response text available', false));
-          }
-        } catch (error) {
-          res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : 'Unknown error'));
-        }
-      }
+      // 统一使用流式响应，让 AI 自动决定是否需要交互式处理
+      // 这与 gemini-cli 的设计保持一致：AI 知道任务是否需要交互
+      await this.handleStreamingChat(fullMessage, res);
+      
     } catch (error) {
       res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : 'Unknown error'));
     }
@@ -203,23 +143,36 @@ export class GeminiService {
   private async handleStreamingChat(message: string, res: express.Response) {
     try {
       console.log('=== 开始流式聊天处理 ===');
+      console.log('收到消息:', message.substring(0, 100) + '...');
       
       // 设置响应头 - 使用JSON格式
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'Transfer-Encoding': 'chunked',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no' // 禁用 Nginx 缓冲
       });
 
       // 保存当前响应对象
       this.currentResponse = res;
 
-      // 创建新的 Turn 实例
+      // 发送初始响应，确保前端知道连接已建立
+      console.log('发送初始响应...');
+      this.sendStructuredEvent(res, 'content', { 
+        text: '正在处理您的请求...', 
+        isPartial: true 
+      });
+
+      // 创建新的 Turn 实例 - 与 gemini-cli 保持一致
+      console.log('创建 Turn 实例...');
       const chat = this.geminiClient!.getChat();
       this.currentTurn = new Turn(chat);
       
       // 创建工具调度器 - 使用完整的 CoreToolScheduler 功能
+      console.log('创建工具调度器...');
       const toolRegistry = await this.config!.getToolRegistry();
       this.toolScheduler = new CoreToolScheduler({
         toolRegistry: Promise.resolve(toolRegistry),
@@ -234,140 +187,118 @@ export class GeminiService {
       // 创建中止信号
       this.abortController = new AbortController();
       
-      // 初始化消息历史，用于 agentic 循环
-      let currentMessageParts: any[] = [{ text: message }];
+      // 使用 Turn 类处理流式响应，与 gemini-cli 保持一致
+      const messageParts = [{ text: message }];
+      console.log('开始处理 Turn 流式响应...');
       
-      // Agentic 工具调用主循环
-      while (true) {
-        console.log('=== 开始新一轮 Gemini 请求 ===');
+      // 收集所有工具调用请求，等待它们完成后再继续
+      const toolCallRequests: ToolCallRequestInfo[] = [];
+      
+      for await (const event of this.currentTurn.run(messageParts, this.abortController.signal)) {
+        console.log('收到事件:', event.type, 'value' in event ? '有数据' : '无数据');
         
-        // 发起 Gemini 流式请求
-        const responseStream = await chat.sendMessageStream({
-          message: currentMessageParts,
-          config: {
-            abortSignal: this.abortController.signal,
-            tools: [
-              { functionDeclarations: toolRegistry.getFunctionDeclarations() },
-            ],
-          },
-        });
-
-        const functionCalls: any[] = [];
-        let hasContent = false;
-
-        // 处理流式响应
-        for await (const resp of responseStream) {
-          if (this.abortController.signal.aborted) {
-            console.log('操作被取消');
-            this.sendStructuredEvent(res, 'error', { message: '操作被取消' });
-            res.end();
-            return;
-          }
-
-          // 处理文本内容
-          const textPart = this.getResponseText(resp);
-          if (textPart) {
-            this.sendStructuredEvent(res, 'content', { text: textPart, isPartial: true });
-            hasContent = true;
-          }
-
-          // 收集工具调用请求
-          if (resp.functionCalls) {
-            functionCalls.push(...resp.functionCalls);
-          }
-        }
-
-        // 如果有工具调用，执行工具并准备下一轮
-        if (functionCalls.length > 0) {
-          console.log(`发现 ${functionCalls.length} 个工具调用`);
-          
-          // 发送工具调用事件
-          for (const fc of functionCalls) {
-            const callId = fc.id ?? `${fc.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        switch (event.type) {
+          case GeminiEventType.Content:
+            // 发送文本内容
+            console.log('发送内容事件:', event.value.substring(0, 50) + '...');
+            this.sendStructuredEvent(res, 'content', { 
+              text: event.value, 
+              isPartial: true 
+            });
+            break;
             
+          case GeminiEventType.Thought:
+            // 发送思考过程
+            console.log('发送思考事件:', event.value.subject);
+            this.sendStructuredEvent(res, 'thought', {
+              subject: event.value.subject,
+              description: event.value.description
+            });
+            break;
+            
+          case GeminiEventType.ToolCallRequest:
+            // 处理工具调用请求
+            console.log('收到工具调用请求:', event.value);
+            toolCallRequests.push(event.value);
+            
+            // 发送工具调用事件
             this.sendStructuredEvent(res, 'tool_call', {
-              callId,
-              name: fc.name,
-              displayName: fc.name,
-              description: `执行工具: ${fc.name}`,
-              args: fc.args || {},
+              callId: event.value.callId,
+              name: event.value.name,
+              displayName: event.value.name,
+              description: `执行工具: ${event.value.name}`,
+              args: event.value.args,
               requiresConfirmation: true
             });
             
             // 发送工具确认事件
             this.sendStructuredEvent(res, 'tool_confirmation', {
-              callId,
-              name: fc.name,
-              displayName: fc.name,
-              description: `需要确认工具调用: ${fc.name}`,
-              prompt: `是否执行工具调用: ${fc.name}`,
-              command: fc.args?.command || null
-            });
-          }
-          
-          // 等待所有工具调用完成
-          const toolResponseParts: any[] = [];
-          
-          for (const fc of functionCalls) {
-            const callId = fc.id ?? `${fc.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-            const requestInfo: ToolCallRequestInfo = {
-              callId,
-              name: fc.name as string,
-              args: (fc.args ?? {}) as Record<string, unknown>,
-              isClientInitiated: false,
-            };
-
-            console.log('调度工具调用:', requestInfo);
-            
-            // 发送工具执行状态
-            this.sendStructuredEvent(res, 'tool_execution', {
-              callId,
-              status: 'executing',
-              message: `正在执行 ${fc.name}...`
+              callId: event.value.callId,
+              name: event.value.name,
+              displayName: event.value.name,
+              description: `需要确认工具调用: ${event.value.name}`,
+              prompt: `是否执行工具调用: ${event.value.name}`,
+              command: event.value.args?.command || null
             });
             
             // 使用 CoreToolScheduler 调度工具调用
-            await this.toolScheduler!.schedule(requestInfo, this.abortController!.signal);
+            await this.toolScheduler!.schedule(event.value, this.abortController!.signal);
+            break;
             
-            // 等待工具调用完成（设置超时）
-            const completedCall = await this.waitForToolCallCompletionWithTimeout(callId, 30000); // 30秒超时
+          case GeminiEventType.ToolCallResponse:
+            // 处理工具调用响应
+            console.log('收到工具调用响应:', event.value);
+            break;
             
-            if (completedCall && completedCall.response) {
-              // 发送工具执行结果
-              const resultText = this.formatToolResult(completedCall);
-              this.sendStructuredEvent(res, 'tool_result', {
-                callId,
-                name: fc.name,
-                result: resultText,
-                displayResult: resultText,
-                success: true,
-                error: null
-              });
-              
-              const parts = Array.isArray(completedCall.response.responseParts)
-                ? completedCall.response.responseParts
-                : [completedCall.response.responseParts];
-              
-              for (const part of parts) {
-                if (typeof part === 'string') {
-                  toolResponseParts.push({ text: part });
-                } else if (part) {
-                  toolResponseParts.push(part);
-                }
-              }
-            }
-          }
-          
-          // 准备下一轮消息
-          currentMessageParts = toolResponseParts;
-          
-        } else {
-          // 没有工具调用，对话结束
-          console.log('=== 对话结束，没有更多工具调用 ===');
-          this.sendStructuredEvent(res, 'complete', { success: true, message: '对话完成' });
-          break;
+          case GeminiEventType.Error:
+            // 处理错误
+            console.error('收到错误事件:', event.value);
+            this.sendStructuredEvent(res, 'error', { 
+              message: event.value.error.message,
+              code: 'GEMINI_ERROR',
+              status: event.value.error.status
+            });
+            break;
+            
+          case GeminiEventType.UserCancelled:
+            // 处理用户取消
+            console.log('用户取消请求');
+            this.sendStructuredEvent(res, 'error', { message: '操作被取消' });
+            break;
+            
+          case GeminiEventType.ChatCompressed:
+            // 处理聊天压缩
+            console.log('聊天历史被压缩:', event.value);
+            break;
         }
       }
+      
+      console.log('Turn 流式响应处理完成，工具调用数量:', toolCallRequests.length);
+      
+      // 如果有工具调用，等待它们完成并将结果发送回 Gemini
+      if (toolCallRequests.length > 0) {
+        console.log(`等待 ${toolCallRequests.length} 个工具调用完成...`);
+        
+        // 等待所有工具调用完成
+        const completedCalls = await this.waitForAllToolCallsToComplete(toolCallRequests);
+        
+        if (completedCalls.length > 0) {
+          console.log('工具调用完成，将结果发送回 Gemini');
+          
+          // 将工具结果发送回 Gemini 继续对话
+          await this.submitToolResponsesToGemini(completedCalls);
+          
+          // 继续处理 Gemini 的后续响应
+          await this.continueConversationAfterTools(completedCalls, res);
+        }
+      }
+      
+      // 发送完成事件
+      console.log('发送完成事件...');
+      this.sendStructuredEvent(res, 'complete', { 
+        success: true, 
+        message: '对话完成' 
+      });
       
       console.log('=== 流式聊天处理完成 ===');
       res.end();
@@ -445,9 +376,19 @@ export class GeminiService {
 
       console.log('提交工具调用响应到 Gemini:', completedCalls.length);
       
-      // 这里需要将工具调用响应发送回 Gemini
-      // 由于 Turn 类已经处理了工具调用，我们只需要继续处理流
-      // 实际的工具响应处理已经在 Turn 类中完成
+      // 构建工具响应消息
+      const toolResponseParts = completedCalls.map(call => {
+        if (call.status === 'success' && call.response) {
+          return call.response.responseParts;
+        } else {
+          return [{ text: `工具 ${call.request.name} 执行失败: ${call.response?.error?.message || '未知错误'}` }];
+        }
+      }).flat();
+      
+      console.log('工具响应消息:', toolResponseParts);
+      
+      // 将工具结果发送回 Gemini 继续对话
+      // 这里我们不需要手动发送，因为 continueConversationAfterTools 会处理
       
     } catch (error) {
       console.error('Error submitting tool responses to Gemini:', error);
@@ -578,6 +519,104 @@ export class GeminiService {
     return this.geminiClient;
   }
 
+  // 等待所有工具调用完成
+  private async waitForAllToolCallsToComplete(toolCallRequests: ToolCallRequestInfo[]): Promise<CompletedToolCall[]> {
+    const callIds = toolCallRequests.map(req => req.callId);
+    
+    return new Promise((resolve) => {
+      // 创建一个临时的完成处理器
+      const tempOnComplete = (completedCalls: CompletedToolCall[]) => {
+        const relevantCalls = completedCalls.filter(call => callIds.includes(call.request.callId));
+        if (relevantCalls.length === callIds.length) {
+          resolve(relevantCalls);
+        }
+      };
+      
+      // 临时替换完成处理器
+      const originalOnComplete = this.toolScheduler?.['onAllToolCallsComplete'];
+      if (this.toolScheduler) {
+        (this.toolScheduler as any).onAllToolCallsComplete = tempOnComplete;
+      }
+      
+      // 设置超时，避免无限等待
+      setTimeout(() => {
+        if (this.toolScheduler) {
+          (this.toolScheduler as any).onAllToolCallsComplete = originalOnComplete;
+        }
+        resolve([]); // 超时返回空数组
+      }, 30000); // 30秒超时
+    });
+  }
+
+  // 工具调用完成后继续对话
+  private async continueConversationAfterTools(completedCalls: CompletedToolCall[], res: express.Response) {
+    try {
+      // 构建工具响应消息
+      const toolResponseParts = completedCalls.map(call => {
+        if (call.status === 'success' && call.response) {
+          return call.response.responseParts;
+        } else {
+          return [{ text: `工具 ${call.request.name} 执行失败: ${call.response?.error?.message || '未知错误'}` }];
+        }
+      }).flat();
+      
+      // 发送工具执行结果事件
+      for (const call of completedCalls) {
+        if (call.status === 'success' && call.response) {
+          this.sendStructuredEvent(res, 'tool_result', {
+            callId: call.request.callId,
+            name: call.request.name,
+            result: this.formatToolResult(call),
+            displayResult: this.formatToolResult(call),
+            success: true,
+            error: null
+          });
+        }
+      }
+      
+      // 继续 Turn 的对话，传入工具结果
+      if (this.currentTurn && this.abortController) {
+        for await (const event of this.currentTurn.run(toolResponseParts, this.abortController.signal)) {
+          switch (event.type) {
+            case GeminiEventType.Content:
+              this.sendStructuredEvent(res, 'content', { 
+                text: event.value, 
+                isPartial: true 
+              });
+              break;
+              
+            case GeminiEventType.Thought:
+              this.sendStructuredEvent(res, 'thought', {
+                subject: event.value.subject,
+                description: event.value.description
+              });
+              break;
+              
+            case GeminiEventType.ToolCallRequest:
+              // 递归处理新的工具调用
+              console.log('收到新的工具调用请求:', event.value);
+              // 这里可以递归调用或重新开始工具调用流程
+              break;
+              
+            case GeminiEventType.Error:
+              this.sendStructuredEvent(res, 'error', { 
+                message: event.value.error.message,
+                code: 'GEMINI_ERROR',
+                status: event.value.error.status
+              });
+              break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error continuing conversation after tools:', error);
+      this.sendStructuredEvent(res, 'error', { 
+        message: '工具执行后继续对话时发生错误',
+        code: 'CONTINUATION_ERROR'
+      });
+    }
+  }
+
   // 等待工具调用完成（带超时）
   private async waitForToolCallCompletionWithTimeout(callId: string, timeoutMs: number): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -639,14 +678,68 @@ export class GeminiService {
 
   // 发送结构化事件
   private sendStructuredEvent(res: express.Response, type: string, data: any) {
-    const event = {
-      type,
-      data,
-      timestamp: new Date().toISOString()
-    };
+    let event: StreamingEvent;
+    
+    switch (type) {
+      case 'content':
+        event = StreamingEventFactory.createContentEvent(data.text, data.isPartial);
+        break;
+      case 'thought':
+        event = StreamingEventFactory.createThoughtEvent(data.subject, data.description);
+        break;
+      case 'tool_call':
+        event = StreamingEventFactory.createToolCallEvent(
+          data.callId,
+          data.name,
+          data.displayName,
+          data.description,
+          data.args,
+          data.requiresConfirmation
+        );
+        break;
+      case 'tool_execution':
+        event = StreamingEventFactory.createToolExecutionEvent(
+          data.callId,
+          data.status,
+          data.message
+        );
+        break;
+      case 'tool_result':
+        event = StreamingEventFactory.createToolResultEvent(
+          data.callId,
+          data.name,
+          data.result,
+          data.displayResult,
+          data.success,
+          data.error
+        );
+        break;
+      case 'tool_confirmation':
+        event = StreamingEventFactory.createToolConfirmationEvent(
+          data.callId,
+          data.name,
+          data.displayName,
+          data.description,
+          data.prompt,
+          data.command
+        );
+        break;
+      case 'complete':
+        event = StreamingEventFactory.createCompleteEvent(data.success, data.message);
+        break;
+      case 'error':
+        event = StreamingEventFactory.createErrorEvent(data.message, data.code, data.details);
+        break;
+      default:
+        console.error('未知的事件类型:', type);
+        return;
+    }
     
     const eventJson = JSON.stringify(event) + '\n';
     res.write(eventJson);
+    
+    // 确保数据立即发送到客户端
+    // 在 Node.js 中，res.write() 通常是立即发送的，但我们可以通过设置响应头来优化
   }
   
   // 格式化工具执行结果

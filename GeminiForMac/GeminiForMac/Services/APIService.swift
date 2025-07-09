@@ -44,7 +44,7 @@ class APIService {
         }
     }
     
-    // 发送消息（普通响应）
+    // 发送消息（统一使用流式响应，让 AI 自动决定是否需要交互式处理）
     func sendMessage(_ text: String, filePaths: [String] = [], workspacePath: String? = nil) async -> MessageResponse? {
         guard let url = URL(string: "\(baseURL)/chat") else { return nil }
         
@@ -54,8 +54,8 @@ class APIService {
         
         // 按照标准化API规范发送请求
         var body: [String: Any] = [
-            "message": text,
-            "stream": false  // 明确指定非流式响应
+            "message": text
+            // 移除 stream 参数，统一使用流式响应
         ]
         
         // 添加文件路径和工作目录
@@ -77,7 +77,7 @@ class APIService {
         }
     }
     
-    // 发送消息（流式响应）
+    // 发送消息（流式响应）- 现在这是唯一的方式
     func sendMessageStream(_ text: String, filePaths: [String] = [], workspacePath: String? = nil) async -> AsyncThrowingStream<String, Error> {
         return AsyncThrowingStream { continuation in
             Task {
@@ -92,8 +92,8 @@ class APIService {
                 
                 // 按照标准化API规范发送请求
                 var body: [String: Any] = [
-                    "message": text,
-                    "stream": true  // 明确指定流式响应
+                    "message": text
+                    // 移除 stream 参数，统一使用流式响应
                 ]
                 
                 // 添加文件路径和工作目录

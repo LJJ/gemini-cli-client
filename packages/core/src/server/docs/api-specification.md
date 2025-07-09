@@ -186,25 +186,136 @@ interface ChatResponse extends BaseResponse {
 
 ```typescript
 interface StreamingEvent {
-  type: 'content' | 'tool_execution' | 'tool_result' | 'complete' | 'error';
+  type: 'content' | 'thought' | 'tool_call' | 'tool_execution' | 'tool_result' | 'tool_confirmation' | 'complete' | 'error';
   data: any;
   timestamp: string;
 }
 ```
 
-**事件类型**:
-- `content`: 文本内容片段
-- `tool_execution`: 工具执行状态
-- `tool_result`: 工具执行结果
-- `complete`: 对话完成
-- `error`: 错误信息
+**事件类型详细定义**:
 
-**示例**:
+1. **content** - 文本内容片段
+```typescript
+{
+  "type": "content",
+  "data": {
+    "text": "Hello! How can I help you today?",
+    "isPartial": true
+  },
+  "timestamp": "2025-01-20T10:30:00.000Z"
+}
+```
+
+2. **thought** - AI 思考过程
+```typescript
+{
+  "type": "thought",
+  "data": {
+    "subject": "Considering a Response",
+    "description": "I'm thinking about how to best answer this question..."
+  },
+  "timestamp": "2025-01-20T10:30:00.000Z"
+}
+```
+
+3. **tool_call** - 工具调用请求
+```typescript
+{
+  "type": "tool_call",
+  "data": {
+    "callId": "read-123",
+    "name": "read_file",
+    "displayName": "Read File",
+    "description": "读取指定文件的内容",
+    "args": {
+      "path": "/path/to/file.txt"
+    },
+    "requiresConfirmation": true
+  },
+  "timestamp": "2025-01-20T10:30:01.000Z"
+}
+```
+
+4. **tool_execution** - 工具执行状态
+```typescript
+{
+  "type": "tool_execution",
+  "data": {
+    "callId": "read-123",
+    "status": "executing", // "pending", "executing", "completed", "failed"
+    "message": "正在执行 read_file..."
+  },
+  "timestamp": "2025-01-20T10:30:01.000Z"
+}
+```
+
+5. **tool_result** - 工具执行结果
+```typescript
+{
+  "type": "tool_result",
+  "data": {
+    "callId": "read-123",
+    "name": "read_file",
+    "result": "文件的实际内容",
+    "displayResult": "📄 文件内容已读取",
+    "success": true,
+    "error": null
+  },
+  "timestamp": "2025-01-20T10:30:02.000Z"
+}
+```
+
+6. **tool_confirmation** - 工具确认请求
+```typescript
+{
+  "type": "tool_confirmation",
+  "data": {
+    "callId": "read-123",
+    "name": "read_file",
+    "displayName": "Read File",
+    "description": "需要确认工具调用: read_file",
+    "prompt": "是否执行工具调用: read_file",
+    "command": "read_file /path/to/file.txt"
+  },
+  "timestamp": "2025-01-20T10:30:01.000Z"
+}
+```
+
+7. **complete** - 对话完成
+```typescript
+{
+  "type": "complete",
+  "data": {
+    "success": true,
+    "message": "对话完成"
+  },
+  "timestamp": "2025-01-20T10:30:03.000Z"
+}
+```
+
+8. **error** - 错误信息
+```typescript
+{
+  "type": "error",
+  "data": {
+    "message": "发生错误",
+    "code": "ERROR_CODE",
+    "details": "详细错误信息"
+  },
+  "timestamp": "2025-01-20T10:30:03.000Z"
+}
+```
+
+**完整流式响应示例**:
 ```json
-{"type":"content","data":"Hello! How can I help you today?","timestamp":"2025-01-20T10:30:00.000Z"}
-{"type":"tool_execution","data":{"callId":"read-123","status":"executing","message":"正在执行 read_file..."},"timestamp":"2025-01-20T10:30:01.000Z"}
-{"type":"tool_result","data":{"callId":"read-123","name":"read_file","result":"📄 文件内容已读取","success":true},"timestamp":"2025-01-20T10:30:02.000Z"}
-{"type":"complete","data":{"success":true,"message":"对话完成"},"timestamp":"2025-01-20T10:30:03.000Z"}
+{"type":"content","data":{"text":"正在处理您的请求...","isPartial":true},"timestamp":"2025-01-20T10:30:00.000Z"}
+{"type":"thought","data":{"subject":"Considering a Response","description":"I'm analyzing the user's request..."},"timestamp":"2025-01-20T10:30:01.000Z"}
+{"type":"tool_call","data":{"callId":"read-123","name":"read_file","displayName":"Read File","description":"读取文件内容","args":{"path":"/path/to/file.txt"},"requiresConfirmation":true},"timestamp":"2025-01-20T10:30:02.000Z"}
+{"type":"tool_confirmation","data":{"callId":"read-123","name":"read_file","displayName":"Read File","description":"需要确认工具调用: read_file","prompt":"是否执行工具调用: read_file","command":"read_file /path/to/file.txt"},"timestamp":"2025-01-20T10:30:02.000Z"}
+{"type":"tool_execution","data":{"callId":"read-123","status":"executing","message":"正在执行 read_file..."},"timestamp":"2025-01-20T10:30:03.000Z"}
+{"type":"tool_result","data":{"callId":"read-123","name":"read_file","result":"文件内容","displayResult":"📄 文件内容已读取","success":true,"error":null},"timestamp":"2025-01-20T10:30:04.000Z"}
+{"type":"content","data":{"text":"根据文件内容，我的回答是...","isPartial":false},"timestamp":"2025-01-20T10:30:05.000Z"}
+{"type":"complete","data":{"success":true,"message":"对话完成"},"timestamp":"2025-01-20T10:30:06.000Z"}
 ```
 
 ### POST /tool-confirmation

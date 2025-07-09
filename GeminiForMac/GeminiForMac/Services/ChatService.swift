@@ -58,7 +58,7 @@ class ChatService: ObservableObject {
         errorMessage = nil
         
         do {
-            // 使用流式响应（默认启用）
+            // 统一使用流式响应，让 AI 自动决定是否需要交互式处理
             let stream = await apiService.sendMessageStream(text, filePaths: filePaths, workspacePath: workspacePath)
             var responseContent = ""
             var hasCreatedResponseMessage = false
@@ -92,16 +92,9 @@ class ChatService: ObservableObject {
                 }
             }
             
-            // 如果流式响应为空，尝试普通响应
-            if responseContent.isEmpty {
-                if let response = await apiService.sendMessage(text, filePaths: filePaths, workspacePath: workspacePath) {
-                    messages.append(ChatMessage(
-                        content: response.response,
-                        isUser: false
-                    ))
-                } else {
-                    errorMessage = "发送消息失败，请检查网络连接。"
-                }
+            // 如果流式响应为空，显示错误信息
+            if responseContent.isEmpty && !hasCreatedResponseMessage {
+                errorMessage = "未收到响应内容，请检查网络连接。"
             }
         } catch {
             errorMessage = "发送消息时发生错误: \(error.localizedDescription)"
@@ -112,31 +105,32 @@ class ChatService: ObservableObject {
     
     // 解析结构化事件
     private func parseStructuredEvent(_ chunk: String) -> StreamEvent? {
-        guard let data = chunk.data(using: .utf8) else { return nil }
-        
-        do {
-            let event = try JSONDecoder().decode(StreamEvent.self, from: data)
-            return event
-        } catch {
-            // 如果不是有效的JSON，返回nil
-            return nil
-        }
+        return StreamEvent.parse(from: chunk)
     }
     
     // 处理结构化事件
     private func handleStructuredEvent(_ event: StreamEvent) {
         switch event.data {
-        case .content(let text):
+        case .content(let data):
             // 处理文本内容
             if let lastIndex = messages.indices.last {
                 messages[lastIndex] = ChatMessage(
-                    content: messages[lastIndex].content + text,
+                    content: messages[lastIndex].content + data.text,
                     isUser: false,
                     timestamp: messages[lastIndex].timestamp
                 )
             } else {
-                messages.append(ChatMessage(content: text, isUser: false))
+                messages.append(ChatMessage(content: data.text, isUser: false))
             }
+            
+        case .thought(let data):
+            // 处理思考过程 - 可以选择显示或隐藏
+            // 这里我们选择显示思考过程，让用户了解 AI 的推理过程
+            let thoughtMessage = ChatMessage(
+                content: "💭 **\(data.subject)**\n\(data.description)",
+                isUser: false
+            )
+            messages.append(thoughtMessage)
             
         case .toolCall(let data):
             // 处理工具调用
@@ -185,13 +179,13 @@ class ChatService: ObservableObject {
             pendingToolConfirmation = confirmationEvent
             showToolConfirmation = true
             
-        case .error(let errorText):
+        case .error(let data):
             // 处理错误
-            self.errorMessage = errorText
+            self.errorMessage = data.message
             
-        case .complete(let success):
+        case .complete(let data):
             // 处理完成事件
-            if success {
+            if data.success {
                 let completeMessage = ChatMessage(
                     content: "✅ 操作完成",
                     isUser: false
