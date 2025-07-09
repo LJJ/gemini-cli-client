@@ -42,10 +42,29 @@ class AuthService: ObservableObject {
     }
     
     func clearAuthConfig() {
-        userDefaults.removeObject(forKey: authConfigKey)
-        currentAuthType = nil
-        authStatus = .notAuthenticated
-        showAuthDialog = true
+        Task {
+            // 调用后端API清除认证配置
+            let _ = await APIService().clearAuth()
+            
+            // 清除本地存储
+            userDefaults.removeObject(forKey: authConfigKey)
+            currentAuthType = nil
+            authStatus = .notAuthenticated
+            showAuthDialog = true
+        }
+    }
+    
+    func logout() {
+        Task {
+            // 调用后端API登出
+            let _ = await APIService().logout()
+            
+            // 清除本地存储
+            userDefaults.removeObject(forKey: authConfigKey)
+            currentAuthType = nil
+            authStatus = .notAuthenticated
+            showAuthDialog = true
+        }
     }
     
     // MARK: - 认证验证

@@ -53,6 +53,16 @@ export class APIServer {
       this.authService.handleAuthStatus(req, res);
     });
     
+    app.post('/auth/logout', (req, res) => {
+      this.authService.handleLogout(req, res);
+    });
+    
+    app.post('/auth/clear', (req, res) => {
+      this.authService.handleClearAuth(req, res);
+    });
+    
+
+    
     // 聊天功能 - 连接到真实的 Gemini 服务
     app.post('/chat', (req, res) => {
       this.geminiService.handleChat(req, res);

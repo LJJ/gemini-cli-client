@@ -41,7 +41,7 @@ export class GeminiService {
         targetDir: workspaceDir, // 使用传入的工作目录
         debugMode: false,
         cwd: workspaceDir, // 使用传入的工作目录
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.5-flash', // 使用支持的模型名称
         proxy: process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy,
       });
 
@@ -121,13 +121,19 @@ export class GeminiService {
           // 获取工具注册表
           const toolRegistry = await this.config!.getToolRegistry();
           
-          // 发送消息，包含工具声明
+          // 获取工具声明
+          const functionDeclarations = toolRegistry.getFunctionDeclarations();
+          console.log('工具声明数量:', functionDeclarations.length);
+          
+          // 统一的消息发送处理
+          console.log('发送消息到 Gemini...');
+          
           const response = await chat.sendMessage({ 
             message: fullMessage,
             config: {
-              tools: [
-                { functionDeclarations: toolRegistry.getFunctionDeclarations() },
-              ],
+              tools: functionDeclarations.length > 0 ? [
+                { functionDeclarations },
+              ] : undefined,
             },
           });
           

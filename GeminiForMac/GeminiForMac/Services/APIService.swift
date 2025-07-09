@@ -165,6 +165,38 @@ class APIService {
         }
     }
     
+    // 登出
+    func logout() async -> AuthResponse? {
+        guard let url = URL(string: "\(baseURL)/auth/logout") else { return nil }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            return try JSONDecoder().decode(AuthResponse.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+    
+    // 清除认证配置
+    func clearAuth() async -> AuthResponse? {
+        guard let url = URL(string: "\(baseURL)/auth/clear") else { return nil }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            return try JSONDecoder().decode(AuthResponse.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+    
     // MARK: - 文件操作功能
     
     // 列出目录内容

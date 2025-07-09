@@ -103,6 +103,12 @@ struct ContentView: View {
                 await chatService.checkConnection()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("switchAuthMethod"))) { _ in
+            authService.clearAuthConfig()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("logout"))) { _ in
+            authService.clearAuthConfig()
+        }
         // 认证对话框
         .sheet(isPresented: $authService.showAuthDialog) {
             AuthDialogView(authService: authService)
