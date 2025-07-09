@@ -17,7 +17,7 @@ enum ToolConfirmationType: String, Codable {
     case mcp = "mcp"
 }
 
-// 工具确认结果
+// 工具确认结果 - 与gemini-cli保持一致
 enum ToolConfirmationOutcome: String, Codable {
     case proceedOnce = "proceed_once"
     case proceedAlways = "proceed_always"
@@ -48,11 +48,12 @@ struct ToolConfirmationRequest: Codable {
     let outcome: ToolConfirmationOutcome
 }
 
-// 工具确认响应
+// 工具确认响应 - 更新为标准化格式
 struct ToolConfirmationResponse: Codable {
     let success: Bool
     let message: String
     let timestamp: String
+    let error: String?
 }
 
 // 工具确认事件

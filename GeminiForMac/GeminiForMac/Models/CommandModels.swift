@@ -15,11 +15,14 @@ struct CommandRequest: Codable {
     let cwd: String?
 }
 
-// 命令响应
+// 命令响应 - 更新为标准化格式
 struct CommandResponse: Codable {
+    let success: Bool
     let command: String
     let output: String
-    let error: String?
+    let stderr: String?  // 重命名为stderr避免与BaseResponse.error冲突
     let exitCode: Int
     let timestamp: String
+    let error: String?
+    let message: String?
 } 

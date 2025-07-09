@@ -10,6 +10,7 @@ import { getOauthClient, clearCachedCredentialFile } from '../code_assist/oauth2
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { ResponseFactory } from './utils/responseFactory.js';
 
 export class AuthService {
   private currentAuthType: AuthType | null = null;
@@ -17,10 +18,54 @@ export class AuthService {
   private currentGoogleCloudProject: string | null = null;
   private currentGoogleCloudLocation: string | null = null;
   private isAuthenticated = false;
+  private readonly userAuthConfigPath: string;
 
   constructor() {
+    // 初始化用户认证配置文件路径
+    this.userAuthConfigPath = path.join(os.homedir(), '.gemini', 'user_auth_config.json');
+    
     // 初始化时不自动加载环境变量，等待客户端设置认证方式
     // 只有在没有客户端设置时才使用环境变量作为后备
+  }
+
+  /**
+   * 保存用户的认证选择到本地文件
+   */
+  private async saveUserAuthChoice(authType: AuthType): Promise<void> {
+    try {
+      // 确保目录存在
+      const configDir = path.dirname(this.userAuthConfigPath);
+      await fs.mkdir(configDir, { recursive: true });
+      
+      const config = {
+        authType,
+        timestamp: new Date().toISOString()
+      };
+      
+      await fs.writeFile(this.userAuthConfigPath, JSON.stringify(config, null, 2));
+      console.log('用户认证选择已保存:', authType);
+    } catch (error) {
+      console.error('保存用户认证选择失败:', error);
+    }
+  }
+
+  /**
+   * 加载用户之前的认证选择
+   */
+  private async loadUserAuthChoice(): Promise<AuthType | null> {
+    try {
+      const configData = await fs.readFile(this.userAuthConfigPath, 'utf-8');
+      const config = JSON.parse(configData);
+      
+      if (config.authType && Object.values(AuthType).includes(config.authType)) {
+        console.log('加载用户之前的认证选择:', config.authType);
+        return config.authType;
+      }
+    } catch (error) {
+      // 文件不存在或格式错误，忽略
+      console.log('没有找到用户之前的认证选择');
+    }
+    return null;
   }
 
   private loadFromEnvironment() {
@@ -122,10 +167,7 @@ export class AuthService {
       const { authType, apiKey, googleCloudProject, googleCloudLocation } = req.body;
 
       if (!authType) {
-        return res.status(400).json({ 
-          success: false, 
-          message: '认证类型是必需的' 
-        });
+        return res.status(400).json(ResponseFactory.validationError('authType', '认证类型是必需的'));
       }
 
       console.log('设置认证配置:', { authType, hasApiKey: !!apiKey, googleCloudProject, googleCloudLocation });
@@ -133,10 +175,7 @@ export class AuthService {
       // 验证认证方法
       const validationError = this.validateAuthMethod(authType, apiKey, googleCloudProject, googleCloudLocation);
       if (validationError) {
-        return res.status(400).json({ 
-          success: false, 
-          message: validationError 
-        });
+        return res.status(400).json(ResponseFactory.validationError('auth', validationError));
       }
 
       // 保存认证配置
@@ -144,6 +183,9 @@ export class AuthService {
       this.currentApiKey = apiKey || null;
       this.currentGoogleCloudProject = googleCloudProject || null;
       this.currentGoogleCloudLocation = googleCloudLocation || null;
+
+      // 保存用户的选择
+      await this.saveUserAuthChoice(authType);
 
       // 根据认证类型处理
       if (authType === AuthType.LOGIN_WITH_GOOGLE) {
@@ -154,19 +196,11 @@ export class AuthService {
         this.isAuthenticated = true;
       }
 
-      res.json({
-        success: true,
-        message: '认证配置已设置',
-        timestamp: new Date().toISOString()
-      });
+      res.json(ResponseFactory.authConfig('认证配置已设置'));
 
     } catch (error) {
       console.error('Error in handleAuthConfig:', error);
-      res.status(500).json({ 
-        success: false,
-        message: '设置认证配置失败',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : '设置认证配置失败'));
     }
   }
 
@@ -260,30 +294,47 @@ export class AuthService {
 
   public async handleAuthStatus(req: express.Request, res: express.Response) {
     try {
-      // 只有在明确请求时才从环境变量加载（通过查询参数控制）
-      const loadFromEnv = req.query.loadFromEnv === 'true';
-      if (this.currentAuthType === null && loadFromEnv) {
-        this.loadFromEnvironment();
+      // 如果没有设置认证类型，优先尝试加载用户之前的选择
+      if (this.currentAuthType === null) {
+        console.log('检测到未设置认证类型，尝试加载用户之前的认证选择');
+        
+        // 1. 首先尝试加载用户之前的选择
+        const userChoice = await this.loadUserAuthChoice();
+        if (userChoice) {
+          console.log('使用用户之前的认证选择:', userChoice);
+          this.currentAuthType = userChoice;
+          
+          // 如果是Google OAuth，需要检查凭据是否有效
+          if (userChoice === AuthType.LOGIN_WITH_GOOGLE) {
+            try {
+              // 尝试获取OAuth客户端来验证凭据
+              await getOauthClient();
+              this.isAuthenticated = true;
+              console.log('Google OAuth凭据有效，已自动认证');
+            } catch (error) {
+              console.log('Google OAuth凭据无效，需要重新登录');
+              this.isAuthenticated = false;
+            }
+          } else {
+            // 对于API Key认证，需要从环境变量加载配置
+            this.loadFromEnvironment();
+          }
+        } else {
+          // 2. 如果没有用户选择，才从环境变量加载
+          console.log('没有用户选择，尝试从环境变量加载认证配置');
+          this.loadFromEnvironment();
+        }
       }
 
-      res.json({
-        success: true,
-        message: '认证状态查询成功',
-        data: {
-          isAuthenticated: this.isAuthenticated,
-          authType: this.currentAuthType,
-          hasApiKey: !!this.currentApiKey,
-          hasGoogleCloudConfig: !!(this.currentGoogleCloudProject && this.currentGoogleCloudLocation)
-        },
-        timestamp: new Date().toISOString()
-      });
+      res.json(ResponseFactory.authStatus({
+        isAuthenticated: this.isAuthenticated,
+        authType: this.currentAuthType,
+        hasApiKey: !!this.currentApiKey,
+        hasGoogleCloudConfig: !!(this.currentGoogleCloudProject && this.currentGoogleCloudLocation)
+      }));
     } catch (error) {
       console.error('Error in handleAuthStatus:', error);
-      res.status(500).json({ 
-        success: false,
-        message: '查询认证状态失败',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : '查询认证状态失败'));
     }
   }
 
@@ -346,18 +397,10 @@ export class AuthService {
       this.currentGoogleCloudLocation = null;
       this.isAuthenticated = false;
       
-      res.json({
-        success: true,
-        message: '登出成功，认证配置已清除',
-        timestamp: new Date().toISOString()
-      });
+      res.json(ResponseFactory.authConfig('登出成功，认证配置已清除'));
     } catch (error) {
       console.error('Error in handleLogout:', error);
-      res.status(500).json({ 
-        success: false,
-        message: '登出失败',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : '登出失败'));
     }
   }
 
@@ -376,18 +419,10 @@ export class AuthService {
       // 添加一个标记，防止立即重新加载环境变量
       console.log('认证配置已清除，等待客户端设置新的认证方式');
       
-      res.json({
-        success: true,
-        message: '认证配置已清除，可以重新设置认证方式',
-        timestamp: new Date().toISOString()
-      });
+      res.json(ResponseFactory.authConfig('认证配置已清除，可以重新设置认证方式'));
     } catch (error) {
       console.error('Error in handleClearAuth:', error);
-      res.status(500).json({ 
-        success: false,
-        message: '清除认证配置失败',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : '清除认证配置失败'));
     }
   }
 

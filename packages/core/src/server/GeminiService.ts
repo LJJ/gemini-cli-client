@@ -12,6 +12,7 @@ import { ApprovalMode, createToolRegistry } from '../config/config.js';
 import { createContentGeneratorConfig, AuthType } from '../core/contentGenerator.js';
 import { AuthService } from './AuthService.js';
 import express from 'express';
+import { ResponseFactory } from './utils/responseFactory.js';
 
 export class GeminiService {
   private geminiClient: GeminiClient | null = null;
@@ -72,7 +73,7 @@ export class GeminiService {
       const { message, stream = false, filePaths = [], workspacePath } = req.body;
       
       if (!message) {
-        return res.status(400).json({ error: 'Message is required' });
+        return res.status(400).json(ResponseFactory.validationError('message', 'Message is required'));
       }
 
       console.log('Processing chat request', { 
@@ -143,12 +144,32 @@ export class GeminiService {
           
           // 检查是否有工具调用
           const functionCalls = response.functionCalls || [];
+          console.log('直接的工具调用:', functionCalls);
           
-          if (functionCalls.length > 0) {
-            console.log(`发现 ${functionCalls.length} 个工具调用，需要执行工具`);
+          // 还需要检查 candidates 中的工具调用
+          const candidateFunctionCalls: any[] = [];
+          if (response.candidates && response.candidates.length > 0) {
+            const content = response.candidates[0].content;
+            if (content && content.parts) {
+              for (const part of content.parts) {
+                if (part.functionCall) {
+                  candidateFunctionCalls.push(part.functionCall);
+                }
+              }
+            }
+          }
+          console.log('从 candidates 中提取的工具调用:', candidateFunctionCalls);
+          
+          const allFunctionCalls = [...functionCalls, ...candidateFunctionCalls];
+          console.log('所有工具调用:', allFunctionCalls);
+          console.log('工具调用数量:', allFunctionCalls.length);
+          
+          if (allFunctionCalls.length > 0) {
+            console.log(`发现 ${allFunctionCalls.length} 个工具调用，需要执行工具`);
+            console.log('工具调用详情:', allFunctionCalls);
             
             // 执行工具调用
-            const toolResults = await this.executeToolCalls(functionCalls);
+            const toolResults = await this.executeToolCalls(allFunctionCalls);
             
             // 将工具结果发送回 Gemini
             const finalResponse = await chat.sendMessage({
@@ -162,33 +183,20 @@ export class GeminiService {
             
             const finalResponseText = this.getResponseText(finalResponse);
             
-            res.json({
-              response: finalResponseText || '工具执行完成，但没有获得文本响应',
-              timestamp: new Date().toISOString()
-            });
+            res.json(ResponseFactory.chat(finalResponseText || '工具执行完成，但没有获得文本响应', true));
           } else {
+            console.log('没有发现工具调用，直接返回响应');
             // 没有工具调用，直接返回响应
             const responseText = this.getResponseText(response);
             
-            res.json({
-              response: responseText || 'No response text available',
-              timestamp: new Date().toISOString()
-            });
+            res.json(ResponseFactory.chat(responseText || 'No response text available', false));
           }
         } catch (error) {
-          console.error('Error sending message to Gemini:', error);
-          res.status(500).json({ 
-            error: 'Failed to send message to Gemini',
-            message: error instanceof Error ? error.message : 'Unknown error'
-          });
+          res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : 'Unknown error'));
         }
       }
     } catch (error) {
-      console.error('Error in handleChat:', error);
-      res.status(500).json({ 
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
+      res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
@@ -486,15 +494,16 @@ export class GeminiService {
             type: typeof part,
             hasText: !!part.text,
             text: part.text,
-            hasFunctionCall: !!part.functionCall
+            hasFunctionCall: !!part.functionCall,
+            isThought: part.thought === true
           })));
           
-          // 过滤出文本部分
+          // 只过滤出 thought !== true 的文本部分
           const textParts = parts
-            .filter((part: any) => part.text)
+            .filter((part: any) => !part.thought && part.text)
             .map((part: any) => part.text);
           
-          console.log('过滤后的文本段:', textParts);
+          console.log('过滤后的用户可见文本段:', textParts);
           
           if (textParts.length > 0) {
             const result = textParts.join('');
@@ -502,7 +511,7 @@ export class GeminiService {
             console.log('=== getResponseText 函数结束 ===');
             return result;
           } else {
-            console.log('没有找到文本段，返回 undefined');
+            console.log('没有找到用户可见文本段，返回 undefined');
             console.log('=== getResponseText 函数结束 ===');
             return null;
           }
@@ -533,13 +542,13 @@ export class GeminiService {
       const { callId, outcome } = req.body;
       
       if (!callId || !outcome) {
-        return res.status(400).json({ error: 'callId and outcome are required' });
+        return res.status(400).json(ResponseFactory.validationError('callId/outcome', 'callId and outcome are required'));
       }
 
       console.log('处理工具确认:', { callId, outcome });
 
       if (!this.toolScheduler) {
-        return res.status(500).json({ error: 'Tool scheduler not initialized' });
+        return res.status(500).json(ResponseFactory.internalError('Tool scheduler not initialized'));
       }
 
       // 获取工具调用 - 直接访问 toolCalls 数组
@@ -547,9 +556,7 @@ export class GeminiService {
       const toolCall = toolCalls.find((tc: any) => tc.request.callId === callId);
       
       if (!toolCall || toolCall.status !== 'awaiting_approval') {
-        return res.status(404).json({ 
-          error: 'Tool call not found or not awaiting approval' 
-        });
+        return res.status(404).json(ResponseFactory.notFoundError('Tool call not found or not awaiting approval'));
       }
 
       // 使用 CoreToolScheduler 的 handleConfirmationResponse
@@ -560,18 +567,10 @@ export class GeminiService {
         this.abortController!.signal
       );
       
-      res.json({
-        success: true,
-        message: 'Tool confirmation processed',
-        timestamp: new Date().toISOString()
-      });
+      res.json(ResponseFactory.toolConfirmation('Tool confirmation processed'));
       
     } catch (error) {
-      console.error('Error in handleToolConfirmation:', error);
-      res.status(500).json({ 
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
+      res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 

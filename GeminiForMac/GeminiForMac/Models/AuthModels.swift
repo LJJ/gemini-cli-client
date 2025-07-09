@@ -72,10 +72,26 @@ struct AuthConfig: Codable {
     }
 }
 
-// MARK: - API 响应模型
+// MARK: - API 响应模型 - 更新为标准化格式
 struct AuthResponse: Codable {
     let success: Bool
     let message: String
+    let timestamp: String
+    let error: String?
+}
+
+// 认证状态响应
+struct AuthStatusResponse: Codable {
+    let success: Bool
+    let message: String
+    let data: AuthStatusData
+    let timestamp: String
+    let error: String?
+}
+
+struct AuthStatusData: Codable {
+    let isAuthenticated: Bool
     let authType: String?
-    let redirectUrl: String?
+    let hasApiKey: Bool
+    let hasGoogleCloudConfig: Bool
 }

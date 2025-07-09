@@ -9,9 +9,23 @@ import Foundation
 
 // MARK: - API响应模型
 struct MessageResponse: Codable {
-    let response: String
     let success: Bool
+    let response: String
+    let hasToolCalls: Bool?
+    let toolCalls: [ToolCall]?
+    let timestamp: String
     let error: String?
+    let message: String?
+}
+
+struct ToolCall: Codable {
+    let id: String
+    let name: String
+    let args: [String: String]  // 简化为字符串字典
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, args
+    }
 }
 
 // MARK: - API服务类
@@ -20,7 +34,7 @@ class APIService {
     
     // 检查服务器状态
     func checkServerStatus() async -> Bool {
-        guard let url = URL(string: "\(baseURL)/auth/status") else { return false }
+        guard let url = URL(string: "\(baseURL)/status") else { return false }
         
         do {
             let (_, response) = try await URLSession.shared.data(from: url)
@@ -38,11 +52,19 @@ class APIService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = [
+        // 按照标准化API规范发送请求
+        var body: [String: Any] = [
             "message": text,
-            "filePaths": filePaths,
-            "workspacePath": workspacePath ?? ""
+            "stream": false  // 明确指定非流式响应
         ]
+        
+        // 添加文件路径和工作目录
+        if !filePaths.isEmpty {
+            body["filePaths"] = filePaths
+        }
+        if let workspacePath = workspacePath, !workspacePath.isEmpty {
+            body["workspacePath"] = workspacePath
+        }
         
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
@@ -50,6 +72,7 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(MessageResponse.self, from: data)
         } catch {
+            print("解析响应失败: \(error)")
             return nil
         }
     }
@@ -67,11 +90,19 @@ class APIService {
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 
-                let body: [String: Any] = [
+                // 按照标准化API规范发送请求
+                var body: [String: Any] = [
                     "message": text,
-                    "filePaths": filePaths,
-                    "workspacePath": workspacePath ?? ""
+                    "stream": true  // 明确指定流式响应
                 ]
+                
+                // 添加文件路径和工作目录
+                if !filePaths.isEmpty {
+                    body["filePaths"] = filePaths
+                }
+                if let workspacePath = workspacePath, !workspacePath.isEmpty {
+                    body["workspacePath"] = workspacePath
+                }
                 
                 request.httpBody = try? JSONSerialization.data(withJSONObject: body)
                 
@@ -80,15 +111,7 @@ class APIService {
                     
                     for try await line in result.lines {
                         if !line.isEmpty {
-                            // 尝试解析JSON事件，如果失败则作为普通文本返回
-                            if let data = line.data(using: .utf8),
-                               let _ = try? JSONSerialization.jsonObject(with: data) {
-                                // 是有效的JSON，直接返回
-                                continuation.yield(line)
-                            } else {
-                                // 不是JSON，作为普通文本返回
-                                continuation.yield(line)
-                            }
+                            continuation.yield(line)
                         }
                     }
                     continuation.finish()
@@ -99,14 +122,15 @@ class APIService {
         }
     }
     
-    // 发送工具确认
+    // 发送工具确认 - 修复API路径
     func sendToolConfirmation(callId: String, outcome: ToolConfirmationOutcome) async -> ToolConfirmationResponse? {
-        guard let url = URL(string: "\(baseURL)/tools/confirm") else { return nil }
+        guard let url = URL(string: "\(baseURL)/tool-confirmation") else { return nil }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        // 按照标准化API规范发送请求
         let body: [String: Any] = [
             "callId": callId,
             "outcome": outcome.rawValue
@@ -118,6 +142,7 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(ToolConfirmationResponse.self, from: data)
         } catch {
+            print("解析工具确认响应失败: \(error)")
             return nil
         }
     }
@@ -132,12 +157,20 @@ class APIService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = [
-            "authType": authType.rawValue,
-            "apiKey": apiKey ?? "",
-            "googleCloudProject": googleCloudProject ?? "",
-            "googleCloudLocation": googleCloudLocation ?? ""
+        // 按照标准化API规范发送请求
+        var body: [String: Any] = [
+            "authType": authType.rawValue
         ]
+        
+        if let apiKey = apiKey, !apiKey.isEmpty {
+            body["apiKey"] = apiKey
+        }
+        if let googleCloudProject = googleCloudProject, !googleCloudProject.isEmpty {
+            body["googleCloudProject"] = googleCloudProject
+        }
+        if let googleCloudLocation = googleCloudLocation, !googleCloudLocation.isEmpty {
+            body["googleCloudLocation"] = googleCloudLocation
+        }
         
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
@@ -145,6 +178,7 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(AuthResponse.self, from: data)
         } catch {
+            print("解析认证配置响应失败: \(error)")
             return nil
         }
     }
@@ -161,6 +195,20 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(AuthResponse.self, from: data)
         } catch {
+            print("解析Google登录响应失败: \(error)")
+            return nil
+        }
+    }
+    
+    // 获取认证状态
+    func getAuthStatus() async -> AuthStatusResponse? {
+        guard let url = URL(string: "\(baseURL)/auth/status") else { return nil }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            return try JSONDecoder().decode(AuthStatusResponse.self, from: data)
+        } catch {
+            print("解析认证状态响应失败: \(error)")
             return nil
         }
     }
@@ -177,6 +225,7 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(AuthResponse.self, from: data)
         } catch {
+            print("解析登出响应失败: \(error)")
             return nil
         }
     }
@@ -193,6 +242,7 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(AuthResponse.self, from: data)
         } catch {
+            print("解析清除认证响应失败: \(error)")
             return nil
         }
     }
@@ -207,6 +257,7 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(from: url)
             return try JSONDecoder().decode(DirectoryResponse.self, from: data)
         } catch {
+            print("解析目录列表响应失败: \(error)")
             return nil
         }
     }
@@ -226,6 +277,7 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(FileResponse.self, from: data)
         } catch {
+            print("解析文件读取响应失败: \(error)")
             return nil
         }
     }
@@ -248,6 +300,7 @@ class APIService {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(FileResponse.self, from: data)
         } catch {
+            print("解析文件写入响应失败: \(error)")
             return nil
         }
     }
@@ -260,16 +313,18 @@ class APIService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = [
-            "command": command,
-            "cwd": cwd ?? ""
-        ]
+        var body: [String: Any] = ["command": command]
+        if let cwd = cwd, !cwd.isEmpty {
+            body["cwd"] = cwd
+        }
+        
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
             return try JSONDecoder().decode(CommandResponse.self, from: data)
         } catch {
+            print("解析命令执行响应失败: \(error)")
             return nil
         }
     }

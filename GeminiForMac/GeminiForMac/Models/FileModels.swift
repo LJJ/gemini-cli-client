@@ -21,20 +21,24 @@ struct DirectoryItem: Codable, Identifiable {
     }
 }
 
-// 目录响应
+// 目录响应 - 更新为标准化格式
 struct DirectoryResponse: Codable {
+    let success: Bool
     let path: String
     let items: [DirectoryItem]
     let timestamp: String
+    let error: String?
+    let message: String?
 }
 
-// 文件响应
+// 文件响应 - 更新为标准化格式
 struct FileResponse: Codable {
+    let success: Bool
     let path: String
     let content: String?
-    let success: Bool?
     let message: String?
     let timestamp: String
+    let error: String?
 }
 
 // 文件请求
