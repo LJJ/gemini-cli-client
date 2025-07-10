@@ -99,7 +99,7 @@ export class APIServer {
       console.log(`📡 Health check: http://localhost:${port}/status`);
       console.log(`🔐 Auth endpoints: http://localhost:${port}/auth/*`);
       console.log(`💬 Chat endpoint: http://localhost:${port}/chat`);
-      console.log(`📁 File operations: http://localhost:${port}/list-directory`);
+      console.log(`📂 File operations: http://localhost:${port}/list-directory`);
       console.log(`⚡ Command execution: http://localhost:${port}/execute-command`);
     });
   }

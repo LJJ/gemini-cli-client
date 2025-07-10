@@ -20,6 +20,7 @@ import { AuthService } from '../auth/AuthService.js';
  * - HTTP 请求处理
  * - 依赖注入管理
  * - 高级别错误处理
+ * - 智能工作目录管理
  */
 export class GeminiService {
   private clientManager: ClientManager;
@@ -50,10 +51,11 @@ export class GeminiService {
       console.log('Processing chat request', { 
         message: message.substring(0, 100),
         filePaths: filePaths.length,
-        workspacePath
+        requestedWorkspace: workspacePath,
+        currentWorkspace: this.clientManager.getCurrentWorkspace()
       });
 
-      // 初始化客户端（如果需要的话）
+      // 智能初始化客户端（自动检测工作目录变化，子路径优化）
       await this.clientManager.initializeClient(workspacePath);
 
       // 委托给聊天处理器
@@ -66,22 +68,19 @@ export class GeminiService {
 
   public async handleToolConfirmation(req: express.Request, res: express.Response) {
     try {
-      const { callId, outcome } = req.body;
+      const { toolCallId, approved } = req.body;
       
-      if (!callId || !outcome) {
-        return res.status(400).json(ResponseFactory.validationError('callId/outcome', 'callId and outcome are required'));
+      if (!toolCallId || typeof approved !== 'boolean') {
+        return res.status(400).json(ResponseFactory.validationError('toolCallId/approved', 'Tool call ID and approval status are required'));
       }
 
-      console.log('处理工具确认:', { callId, outcome });
-
-      // 委托给工具协调器
-      await this.toolOrchestrator.handleToolConfirmation(
-        callId,
-        outcome,
-        new AbortController().signal // TODO: 应该从活跃的聊天会话中获取
-      );
+      // 委托给工具协调器处理
+      const abortController = new AbortController();
+      await this.toolOrchestrator.handleToolConfirmation(toolCallId, approved, abortController.signal);
       
-      res.json(ResponseFactory.toolConfirmation('Tool confirmation processed'));
+      res.json(ResponseFactory.success({
+        message: approved ? '工具调用已批准' : '工具调用已拒绝'
+      }));
       
     } catch (error) {
       res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : 'Unknown error'));
