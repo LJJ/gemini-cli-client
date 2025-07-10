@@ -89,10 +89,19 @@ validating → awaiting_approval → scheduled → executing → success/error/c
 
 ## 相关文件
 
+### Server 模块结构
+- `packages/core/src/server/auth/` - 认证相关服务（AuthService、AuthConfigManager、OAuthManager、AuthValidator）
+- `packages/core/src/server/chat/` - 聊天与流式事件服务（ChatHandler、StreamingEventService）
+- `packages/core/src/server/tools/` - 工具与命令服务（ToolOrchestrator、CommandService）
+- `packages/core/src/server/files/` - 文件操作服务（FileService）
+- `packages/core/src/server/core/` - 核心服务（GeminiService、ClientManager、ServerConfig）
+- `packages/core/src/server/types/` - 类型定义
+- `packages/core/src/server/utils/` - 工具类
+
+### 核心组件
 - `packages/core/src/core/coreToolScheduler.ts` - 核心调度器实现
 - `packages/core/src/core/turn.ts` - 对话轮次管理
 - `packages/cli/src/ui/hooks/useReactToolScheduler.ts` - React Hook 适配器
-- `packages/core/src/server/GeminiService.ts` - 我们的 Gemini 服务（需要重构）
 
 ## 注意事项
 

@@ -4,15 +4,51 @@
 
 本文档提供了将 gemini-cli 工具确认机制集成到我们 server 的具体实现指南。
 
+## 目录结构说明
+
+我们的 server 实现采用职责分离的模块化结构，每个模块都有明确的单一职责：
+
+```
+server/
+├── auth/           # 认证相关服务
+├── chat/           # 聊天与流式事件服务  
+├── tools/          # 工具与命令服务
+├── files/          # 文件操作服务
+├── core/           # 核心服务
+├── types/          # 类型定义
+├── utils/          # 工具类
+└── docs/           # 文档
+```
+
+这种结构遵循 SOLID 设计原则，确保每个模块职责明确，便于维护和扩展。
+
 ## 当前实现分析
 
 ### 现有架构
 
-我们当前的 server 实现包括：
-- `GeminiService` - 处理 Gemini API 通信
-- `FileService` - 文件操作服务
-- `CommandService` - 命令执行服务
-- `ServerConfig` - 服务器配置
+我们当前的 server 实现采用职责分离结构，包括：
+
+#### 认证模块 (auth/)
+- **AuthService** - 认证流程协调，HTTP请求处理，认证状态管理
+- **AuthConfigManager** - 认证配置的持久化和加载
+- **OAuthManager** - OAuth流程的具体实现
+- **AuthValidator** - 认证参数的验证
+
+#### 聊天模块 (chat/)
+- **ChatHandler** - 聊天消息处理，流式响应管理，事件分发
+- **StreamingEventService** - 结构化事件创建和发送
+
+#### 工具模块 (tools/)
+- **ToolOrchestrator** - 工具调用的调度和状态管理
+- **CommandService** - 命令执行服务
+
+#### 文件模块 (files/)
+- **FileService** - 文件读写、目录列表等文件操作
+
+#### 核心模块 (core/)
+- **GeminiService** - 服务组合和协调，HTTP请求处理
+- **ClientManager** - Gemini客户端初始化和管理
+- **ServerConfig** - 服务器配置管理
 
 ### 需要改进的地方
 
