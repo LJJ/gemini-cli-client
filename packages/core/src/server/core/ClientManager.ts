@@ -7,6 +7,7 @@
 import { Config, GeminiClient } from '../../index.js';
 import { createToolRegistry } from '../../config/config.js';
 import { AuthService } from '../auth/AuthService.js';
+import { DEFAULT_GEMINI_FLASH_MODEL } from '../../config/models.js';
 import * as path from 'path';
 
 /**
@@ -143,7 +144,7 @@ export class ClientManager {
         targetDir: workspacePath,
         debugMode: false,
         cwd: workspacePath,
-        model: 'gemini-2.5-flash',
+        model: DEFAULT_GEMINI_FLASH_MODEL,
         proxy: this.getProxyConfig(),
       });
 

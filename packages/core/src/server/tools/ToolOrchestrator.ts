@@ -25,6 +25,9 @@ export class ToolOrchestrator {
   private toolScheduler: CoreToolScheduler | null = null;
   private currentResponse: express.Response | null = null;
   private toolCompletionCallback: ((completedCalls: CompletedToolCall[]) => Promise<void>) | null = null;
+  
+  // 防止重复发送工具确认事件
+  private sentConfirmationEvents: Set<string> = new Set();
 
   constructor(
     private streamingEventService: StreamingEventService
@@ -118,6 +121,8 @@ export class ToolOrchestrator {
 
   public clearCurrentResponse(): void {
     this.currentResponse = null;
+    // 清除已发送的确认事件记录
+    this.sentConfirmationEvents.clear();
   }
 
   private async handleAllToolCallsComplete(completedCalls: CompletedToolCall[]): Promise<void> {
@@ -141,13 +146,20 @@ export class ToolOrchestrator {
     if (this.currentResponse) {
       for (const toolCall of toolCalls) {
         if (toolCall.status === 'awaiting_approval') {
-          // 只在工具真正需要确认时才发送确认事件
-          this.streamingEventService.sendToolConfirmationEvent(
-            this.currentResponse,
-            toolCall.request.callId,
-            toolCall.request.name,
-            typeof toolCall.request.args?.command === 'string' ? toolCall.request.args.command : undefined
-          );
+          // 防止重复发送确认事件
+          if (!this.sentConfirmationEvents.has(toolCall.request.callId)) {
+            console.log('发送工具确认事件:', toolCall.request.callId);
+            this.streamingEventService.sendToolConfirmationEvent(
+              this.currentResponse,
+              toolCall.request.callId,
+              toolCall.request.name,
+              typeof toolCall.request.args?.command === 'string' ? toolCall.request.args.command : undefined
+            );
+            // 记录已发送的确认事件
+            this.sentConfirmationEvents.add(toolCall.request.callId);
+          } else {
+            console.log('跳过重复的工具确认事件:', toolCall.request.callId);
+          }
         } else if (toolCall.status === 'executing') {
           this.streamingEventService.sendToolExecutionEvent(
             this.currentResponse,

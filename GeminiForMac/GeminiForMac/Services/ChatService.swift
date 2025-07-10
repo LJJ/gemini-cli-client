@@ -17,13 +17,17 @@ class ChatService: ObservableObject {
     @Published var pendingToolConfirmation: ToolConfirmationEvent?
     @Published var showToolConfirmation = false
     
+    // 工具确认队列
+    private var toolConfirmationQueue: [ToolConfirmationEvent] = []
+    private var isProcessingConfirmation = false
+    
     private let apiService = APIService()
     
     init() {
         // 添加欢迎消息
         messages.append(ChatMessage(
             content: "你好！我是 Gemini CLI 助手。我可以帮助你编写代码、回答问题或执行各种任务。\n\n💡 提示：你可以在文件浏览器中选择文件，然后发送消息时我会自动包含文件内容进行分析。",
-			type: .thinking
+            type: .thinking
         ))
     }
     
@@ -42,14 +46,14 @@ class ChatService: ObservableObject {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         // 添加用户消息
-		let userMessage = ChatMessage(content: text, type: .user)
+        let userMessage = ChatMessage(content: text, type: .user)
         messages.append(userMessage)
         
         // 如果有文件路径，添加一个系统消息显示文件信息
         if !filePaths.isEmpty {
             let fileInfoMessage = ChatMessage(
                 content: "📎 已选择 \(filePaths.count) 个文件进行分析",
-				type: .thinking
+                type: .thinking
             )
             messages.append(fileInfoMessage)
         }
@@ -87,10 +91,10 @@ class ChatService: ObservableObject {
         switch event.data {
         case .content(let data):
             // 处理文本内容
-			if let lastIndex = messages.indices.last, messages.last?.type == .text {
+            if let lastIndex = messages.indices.last, messages.last?.type == .text {
                 messages[lastIndex] = ChatMessage(
                     content: messages[lastIndex].content + data.text,
-					type: .text,
+                    type: .text,
                     timestamp: messages[lastIndex].timestamp
                 )
             } else {
@@ -102,7 +106,7 @@ class ChatService: ObservableObject {
             // 这里我们选择显示思考过程，让用户了解 AI 的推理过程
             let thoughtMessage = ChatMessage(
                 content: "💭 **\(data.subject)**\n\(data.description)",
-				type: .thinking
+                type: .thinking
             )
 //            messages.append(thoughtMessage)
             
@@ -118,7 +122,7 @@ class ChatService: ObservableObject {
             // 处理工具执行状态
             let statusMessage = ChatMessage(
                 content: "⚡ \(data.message)",
-				type: .thinking
+                type: .thinking
             )
             merge(message: statusMessage)
             
@@ -126,12 +130,13 @@ class ChatService: ObservableObject {
             // 处理工具执行结果
             let resultMessage = ChatMessage(
                 content: data.displayResult,
-				type: .thinking
+                type: .thinking
             )
             merge(message: resultMessage)
             
         case .toolConfirmation(let data):
-            // 处理工具确认请求
+            // 处理工具确认请求 - 添加到队列
+            print("收到工具请求，\(data)")
             let confirmationEvent = ToolConfirmationEvent(
                 type: "tool_confirmation",
                 callId: data.callId,
@@ -150,8 +155,7 @@ class ChatService: ObservableObject {
                     toolDisplayName: data.displayName
                 )
             )
-            pendingToolConfirmation = confirmationEvent
-            showToolConfirmation = true
+            addToolConfirmationToQueue(confirmationEvent)
             
         case .error(let data):
             // 处理错误
@@ -169,6 +173,41 @@ class ChatService: ObservableObject {
         } else {
             messages.append(message)
         }
+    }
+    
+    // MARK: - 工具确认队列管理
+    
+    // 添加工具确认到队列
+    private func addToolConfirmationToQueue(_ confirmation: ToolConfirmationEvent) {
+        toolConfirmationQueue.append(confirmation)
+        processNextConfirmation()
+    }
+    
+    // 处理队列中的下一个确认
+    private func processNextConfirmation() {
+        guard !isProcessingConfirmation, !toolConfirmationQueue.isEmpty else { return }
+        
+        isProcessingConfirmation = true
+        pendingToolConfirmation = toolConfirmationQueue.removeFirst()
+        showToolConfirmation = true
+    }
+    
+    // 获取当前队列状态
+    var hasPendingConfirmations: Bool {
+        return !toolConfirmationQueue.isEmpty || pendingToolConfirmation != nil
+    }
+    
+    // 获取队列中等待的确认数量
+    var pendingConfirmationCount: Int {
+        return toolConfirmationQueue.count + (pendingToolConfirmation != nil ? 1 : 0)
+    }
+    
+    // 清空所有待处理的确认
+    func clearAllConfirmations() {
+        toolConfirmationQueue.removeAll()
+        pendingToolConfirmation = nil
+        showToolConfirmation = false
+        isProcessingConfirmation = false
     }
 
     
@@ -192,7 +231,7 @@ class ChatService: ObservableObject {
                 if let lastIndex = messages.indices.last {
                     messages[lastIndex] = ChatMessage(
                         content: "✅ 工具调用执行完成",
-						type: .thinking,
+                        type: .thinking,
                         timestamp: messages[lastIndex].timestamp
                     )
                 }
@@ -203,15 +242,24 @@ class ChatService: ObservableObject {
             errorMessage = "发送确认失败，请检查网络连接。"
         }
         
-        // 清除确认状态
+        // 清除当前确认状态
         pendingToolConfirmation = nil
         showToolConfirmation = false
+        isProcessingConfirmation = false
+        
+        // 处理队列中的下一个确认
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+        processNextConfirmation()
     }
     
     // 取消工具确认
     func cancelToolConfirmation() {
         pendingToolConfirmation = nil
         showToolConfirmation = false
+        isProcessingConfirmation = false
+        
+        // 处理队列中的下一个确认
+        processNextConfirmation()
     }
     
     // 发送消息（重载，兼容原有调用）
@@ -225,7 +273,7 @@ class ChatService: ObservableObject {
         // 重新添加欢迎消息
         messages.append(ChatMessage(
             content: "你好！我是 Gemini CLI 助手。我可以帮助你编写代码、回答问题或执行各种任务。\n\n💡 提示：你可以在文件浏览器中选择文件，然后发送消息时我会自动包含文件内容进行分析。",
-			type: .thinking
+            type: .thinking
         ))
     }
-} 
+}

@@ -10,6 +10,7 @@ import { ResponseFactory } from '../utils/responseFactory.js';
 import { AuthConfigManager } from './AuthConfigManager.js';
 import { OAuthManager } from './OAuthManager.js';
 import { AuthValidator } from './AuthValidator.js';
+import { DEFAULT_GEMINI_FLASH_MODEL } from '../../config/models.js';
 
 /**
  * 认证服务 - 主要协调器
@@ -243,7 +244,7 @@ export class AuthService {
     }
 
     const config = await createContentGeneratorConfig(
-      'gemini-2.0-flash-exp',
+      DEFAULT_GEMINI_FLASH_MODEL,
       this.currentAuthType
     );
 
