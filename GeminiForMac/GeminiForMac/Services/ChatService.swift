@@ -110,9 +110,9 @@ class ChatService: ObservableObject {
             // 处理工具调用
             let toolMessage = ChatMessage(
                 content: "🔧 正在调用工具: \(data.displayName)",
-				type: .thinking
+                type: .thinking
             )
-            messages.append(toolMessage)
+            merge(message: toolMessage)
             
         case .toolExecution(let data):
             // 处理工具执行状态
@@ -120,7 +120,7 @@ class ChatService: ObservableObject {
                 content: "⚡ \(data.message)",
 				type: .thinking
             )
-            messages.append(statusMessage)
+            merge(message: statusMessage)
             
         case .toolResult(let data):
             // 处理工具执行结果
@@ -128,7 +128,7 @@ class ChatService: ObservableObject {
                 content: data.displayResult,
 				type: .thinking
             )
-            messages.append(resultMessage)
+            merge(message: resultMessage)
             
         case .toolConfirmation(let data):
             // 处理工具确认请求
@@ -163,6 +163,13 @@ class ChatService: ObservableObject {
         }
     }
     
+    func merge(message:ChatMessage){
+        if let lastIndex = messages.indices.last, messages.last?.type == message.type {
+            messages[lastIndex] = message
+        } else {
+            messages.append(message)
+        }
+    }
 
     
     // 处理工具确认
