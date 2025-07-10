@@ -11,3 +11,9 @@ max_line_length = 80
 [Makefile]
 indent_style = tab
 indent_size = 8
+
+# 排除 GeminiForMac 目录，让 Xcode 使用默认的 Swift 缩进设置
+[GeminiForMac/**]
+indent_style = unset
+indent_size = unset
+max_line_length = unset

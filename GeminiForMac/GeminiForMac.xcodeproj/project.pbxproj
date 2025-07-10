@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0C2CEA642E1E973C005357AD /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 0C2CEA632E1E973C005357AD /* Factory */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		0C8C51EC2E1807BC00E14BC6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0C2CEA642E1E973C005357AD /* Factory in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = GeminiForMac;
 			packageProductDependencies = (
+				0C2CEA632E1E973C005357AD /* Factory */,
 			);
 			productName = GeminiForMac;
 			productReference = 0C8C51DB2E1807BA00E14BC6 /* GeminiForMac.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 0C8C51D22E1807BA00E14BC6;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0C2CEA622E1E973C005357AD /* XCRemoteSwiftPackageReference "Factory" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0C8C51DC2E1807BA00E14BC6 /* Products */;
 			projectDirPath = "";
@@ -330,6 +339,7 @@
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -386,6 +396,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -413,7 +424,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -441,7 +452,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -458,7 +469,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.lujiji.GeminiForMacTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GeminiForMac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GeminiForMac";
 			};
 			name = Debug;
@@ -476,7 +487,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.lujiji.GeminiForMacTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GeminiForMac.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GeminiForMac";
 			};
 			name = Release;
@@ -492,7 +503,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.lujiji.GeminiForMacUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TEST_TARGET_NAME = GeminiForMac;
 			};
 			name = Debug;
@@ -508,7 +519,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.lujiji.GeminiForMacUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TEST_TARGET_NAME = GeminiForMac;
 			};
 			name = Release;
@@ -553,6 +564,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0C2CEA622E1E973C005357AD /* XCRemoteSwiftPackageReference "Factory" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hmlongco/Factory.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.3;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0C2CEA632E1E973C005357AD /* Factory */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0C2CEA622E1E973C005357AD /* XCRemoteSwiftPackageReference "Factory" */;
+			productName = Factory;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0C8C51D32E1807BA00E14BC6 /* Project object */;
 }

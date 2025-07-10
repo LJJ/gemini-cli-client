@@ -7,18 +7,29 @@
 
 import Foundation
 
+enum ChatMessageType:Int, Codable{
+	case user
+	case text
+	case image
+	case thinking
+}
+
 // MARK: - 聊天消息模型
 struct ChatMessage: Identifiable, Codable {
     let id = UUID()
     let content: String
-    let isUser: Bool
+    let type: ChatMessageType
     let timestamp: Date
     
-    init(content: String, isUser: Bool, timestamp: Date = Date()) {
+	init(content: String, type:ChatMessageType, timestamp: Date = Date()) {
         self.content = content
-        self.isUser = isUser
+        self.type = type
         self.timestamp = timestamp
     }
+	
+	var isUser:Bool{
+		type == .user
+	}
 }
 
 // MARK: - 聊天API模型
@@ -38,4 +49,4 @@ struct StatusResponse: Codable {
     let status: String
     let timestamp: String
     let version: String
-} 
+}

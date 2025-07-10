@@ -23,7 +23,7 @@ class ChatService: ObservableObject {
         // 添加欢迎消息
         messages.append(ChatMessage(
             content: "你好！我是 Gemini CLI 助手。我可以帮助你编写代码、回答问题或执行各种任务。\n\n💡 提示：你可以在文件浏览器中选择文件，然后发送消息时我会自动包含文件内容进行分析。",
-            isUser: false
+			type: .thinking
         ))
     }
     
@@ -42,14 +42,14 @@ class ChatService: ObservableObject {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         // 添加用户消息
-        let userMessage = ChatMessage(content: text, isUser: true)
+		let userMessage = ChatMessage(content: text, type: .user)
         messages.append(userMessage)
         
         // 如果有文件路径，添加一个系统消息显示文件信息
         if !filePaths.isEmpty {
             let fileInfoMessage = ChatMessage(
                 content: "📎 已选择 \(filePaths.count) 个文件进行分析",
-                isUser: false
+				type: .thinking
             )
             messages.append(fileInfoMessage)
         }
@@ -65,6 +65,7 @@ class ChatService: ObservableObject {
             
             for try await chunk in stream {
                 // 尝试解析结构化事件
+              
                 if let event = parseStructuredEvent(chunk) {
                     handleStructuredEvent(event)
                     continue
@@ -77,7 +78,7 @@ class ChatService: ObservableObject {
                 if !hasCreatedResponseMessage {
                     messages.append(ChatMessage(
                         content: responseContent,
-                        isUser: false
+						type: .text
                     ))
                     hasCreatedResponseMessage = true
                 } else {
@@ -85,7 +86,7 @@ class ChatService: ObservableObject {
                     if let lastIndex = messages.indices.last {
                         messages[lastIndex] = ChatMessage(
                             content: responseContent,
-                            isUser: false,
+							type: .text,
                             timestamp: messages[lastIndex].timestamp
                         )
                     }
@@ -113,14 +114,14 @@ class ChatService: ObservableObject {
         switch event.data {
         case .content(let data):
             // 处理文本内容
-            if let lastIndex = messages.indices.last {
+			if let lastIndex = messages.indices.last, messages.last?.type == .text {
                 messages[lastIndex] = ChatMessage(
                     content: messages[lastIndex].content + data.text,
-                    isUser: false,
+					type: .text,
                     timestamp: messages[lastIndex].timestamp
                 )
             } else {
-                messages.append(ChatMessage(content: data.text, isUser: false))
+                messages.append(ChatMessage(content: data.text, type: .text))
             }
             
         case .thought(let data):
@@ -128,15 +129,15 @@ class ChatService: ObservableObject {
             // 这里我们选择显示思考过程，让用户了解 AI 的推理过程
             let thoughtMessage = ChatMessage(
                 content: "💭 **\(data.subject)**\n\(data.description)",
-                isUser: false
+				type: .thinking
             )
-            messages.append(thoughtMessage)
+//            messages.append(thoughtMessage)
             
         case .toolCall(let data):
             // 处理工具调用
             let toolMessage = ChatMessage(
                 content: "🔧 正在调用工具: \(data.displayName)",
-                isUser: false
+				type: .thinking
             )
             messages.append(toolMessage)
             
@@ -144,7 +145,7 @@ class ChatService: ObservableObject {
             // 处理工具执行状态
             let statusMessage = ChatMessage(
                 content: "⚡ \(data.message)",
-                isUser: false
+				type: .thinking
             )
             messages.append(statusMessage)
             
@@ -152,7 +153,7 @@ class ChatService: ObservableObject {
             // 处理工具执行结果
             let resultMessage = ChatMessage(
                 content: data.displayResult,
-                isUser: false
+				type: .thinking
             )
             messages.append(resultMessage)
             
@@ -188,7 +189,7 @@ class ChatService: ObservableObject {
             if data.success {
                 let completeMessage = ChatMessage(
                     content: "✅ 操作完成",
-                    isUser: false
+					type: .thinking
                 )
                 messages.append(completeMessage)
             }
@@ -204,7 +205,7 @@ class ChatService: ObservableObject {
         // 添加确认消息
         let confirmationMessage = ChatMessage(
             content: "✅ 已确认工具调用: \(confirmation.toolName)",
-            isUser: false
+			type: .thinking
         )
         messages.append(confirmationMessage)
         
@@ -217,7 +218,7 @@ class ChatService: ObservableObject {
                 // 添加成功消息
                 let successMessage = ChatMessage(
                     content: "🔄 正在执行工具调用...",
-                    isUser: false
+					type: .thinking
                 )
                 messages.append(successMessage)
                 
@@ -228,7 +229,7 @@ class ChatService: ObservableObject {
                 if let lastIndex = messages.indices.last {
                     messages[lastIndex] = ChatMessage(
                         content: "✅ 工具调用执行完成",
-                        isUser: false,
+						type: .thinking,
                         timestamp: messages[lastIndex].timestamp
                     )
                 }
@@ -261,7 +262,7 @@ class ChatService: ObservableObject {
         // 重新添加欢迎消息
         messages.append(ChatMessage(
             content: "你好！我是 Gemini CLI 助手。我可以帮助你编写代码、回答问题或执行各种任务。\n\n💡 提示：你可以在文件浏览器中选择文件，然后发送消息时我会自动包含文件内容进行分析。",
-            isUser: false
+			type: .thinking
         ))
     }
 } 

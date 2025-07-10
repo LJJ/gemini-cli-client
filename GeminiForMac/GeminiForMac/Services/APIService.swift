@@ -29,7 +29,7 @@ struct ToolCall: Codable {
 }
 
 // MARK: - API服务类
-class APIService {
+final class APIService:Sendable {
     private let baseURL = "http://localhost:8080"
     
     // 检查服务器状态

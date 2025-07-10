@@ -70,12 +70,12 @@ struct MessageView: View {
     VStack {
         MessageView(message: ChatMessage(
             content: "你好！我是 Gemini CLI 助手。",
-            isUser: false
+			type: .image
         ))
         
         MessageView(message: ChatMessage(
             content: "请帮我写一个 Swift 函数",
-            isUser: true
+			type: .user
         ))
     }
     .padding()
