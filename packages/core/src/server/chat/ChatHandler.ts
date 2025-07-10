@@ -97,15 +97,25 @@ export class ChatHandler {
     // 处理初始消息
     await this.processStreamEvents(messageParts, res);
     
-    // 如果有工具调用，等待完成后继续对话
-    while (this.waitingForToolCompletion) {
-      console.log('等待工具调用完成...');
-      await this.waitForToolCompletion();
+    // 处理工具调用结果的循环
+    await this.processToolCallResults(res);
+  }
+
+  private async processToolCallResults(res: express.Response): Promise<void> {
+    // 持续检查是否有待处理的工具调用或已完成的工具调用
+    while (this.waitingForToolCompletion || this.completedToolCalls.length > 0) {
+      // 如果还在等待工具完成，等待一下
+      if (this.waitingForToolCompletion && this.completedToolCalls.length === 0) {
+        console.log('等待工具调用完成...');
+        await this.waitForToolCompletion();
+      }
       
+      // 处理已完成的工具调用
       if (this.completedToolCalls.length > 0) {
         console.log('工具调用完成，发送结果回 Gemini...');
         await this.processToolResults(res);
         this.completedToolCalls = [];
+        // 处理完工具结果后，可能会有新的工具调用，继续循环检查
       }
     }
   }
@@ -114,6 +124,9 @@ export class ChatHandler {
     if (!this.currentTurn || !this.abortController) {
       throw new Error('Turn or AbortController not initialized');
     }
+    
+    // 收集所有工具调用请求，而不是立即处理
+    const toolCallRequests: ToolCallRequestInfo[] = [];
     
     for await (const event of this.currentTurn.run(messageParts, this.abortController.signal)) {
       console.log('收到事件:', event.type);
@@ -132,7 +145,9 @@ export class ChatHandler {
           break;
           
         case GeminiEventType.ToolCallRequest:
-          await this.handleToolCallRequest(event.value, res);
+          // 收集工具调用请求而不是立即处理
+          console.log('收集工具调用请求:', event.value);
+          toolCallRequests.push(event.value);
           break;
           
         case GeminiEventType.ToolCallResponse:
@@ -157,31 +172,43 @@ export class ChatHandler {
           break;
       }
     }
+    
+    // 批量处理所有工具调用请求
+    if (toolCallRequests.length > 0) {
+      console.log(`批量调度 ${toolCallRequests.length} 个工具调用`);
+      await this.handleBatchToolCallRequests(toolCallRequests, res);
+    }
   }
 
-  private async handleToolCallRequest(request: ToolCallRequestInfo, res: express.Response): Promise<void> {
+  private async handleBatchToolCallRequests(requests: ToolCallRequestInfo[], res: express.Response): Promise<void> {
     if (!this.abortController) {
       throw new Error('AbortController not initialized');
     }
 
-    console.log('收到工具调用请求:', request);
+    console.log('批量处理工具调用请求:', requests.length);
     
-    // 记录待处理的工具调用
-    this.pendingToolCalls.set(request.callId, request);
+    // 记录所有待处理的工具调用
+    for (const request of requests) {
+      this.pendingToolCalls.set(request.callId, request);
+    }
     this.waitingForToolCompletion = true;
     
-    await this.toolOrchestrator.scheduleToolCall(
-      request,
+    // 批量调度所有工具调用
+    await this.toolOrchestrator.scheduleToolCalls(
+      requests,
       this.abortController.signal,
       res
     );
+    
+    // 立即检查是否已经有完成的工具调用（针对不需要确认的工具）
+    await new Promise(resolve => setTimeout(resolve, 10)); // 给调度一点时间
   }
 
   private async handleToolCallsComplete(completedCalls: CompletedToolCall[]): Promise<void> {
     console.log('ChatHandler: 收到工具调用完成通知', completedCalls.length);
     
     // 保存完成的工具调用
-    this.completedToolCalls = completedCalls;
+    this.completedToolCalls = [...this.completedToolCalls, ...completedCalls];
     this.waitingForToolCompletion = false;
     
     // 清理待处理的工具调用

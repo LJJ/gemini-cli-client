@@ -53,22 +53,32 @@ export class ToolOrchestrator {
     abortSignal: AbortSignal,
     response: express.Response
   ): Promise<void> {
+    await this.scheduleToolCalls([request], abortSignal, response);
+  }
+
+  public async scheduleToolCalls(
+    requests: ToolCallRequestInfo[],
+    abortSignal: AbortSignal,
+    response: express.Response
+  ): Promise<void> {
     if (!this.toolScheduler) {
       throw new Error('Tool scheduler not initialized');
     }
 
     this.currentResponse = response;
 
-    // 发送工具调用事件
-    this.streamingEventService.sendToolCallEvent(
-      response,
-      request.callId,
-      request.name,
-      request.args
-    );
+    // 为每个工具调用发送工具调用事件
+    for (const request of requests) {
+      this.streamingEventService.sendToolCallEvent(
+        response,
+        request.callId,
+        request.name,
+        request.args
+      );
+    }
 
-    // 调度工具执行（不要在这里发送确认事件，让CoreToolScheduler决定）
-    await this.toolScheduler.schedule(request, abortSignal);
+    // 批量调度工具执行
+    await this.toolScheduler.schedule(requests, abortSignal);
   }
 
   public async handleToolConfirmation(
