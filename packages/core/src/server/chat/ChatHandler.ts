@@ -249,19 +249,29 @@ export class ChatHandler {
         };
       }
       return null;
-    }).filter(Boolean).flat();
+    }).filter((part): part is any => part !== null).flat();
 
-    console.log('发送工具结果到 Gemini:', toolResultParts.length, '个部分');
+    // 确保 toolResultParts 是 Part[] 格式
+    const parts = toolResultParts.map(part => {
+      if (typeof part === 'string') {
+        return { text: part };
+      }
+      return part;
+    });
 
-    // 创建新的 Turn 来处理工具结果
+    console.log('发送工具结果到 Gemini:', parts.length, '个部分');
+
+    // 直接将工具结果添加到聊天历史，而不是创建新的 Turn
     const chat = this.clientManager.getClient()?.getChat();
-    const config = this.clientManager.getConfig();
-    if (chat && config) {
-      const prompt_id = config.getSessionId() + '########' + Date.now();
-      this.currentTurn = new Turn(chat, prompt_id);
+    if (chat) {
+      // 将工具结果添加到聊天历史
+      chat.addHistory({
+        role: 'user',
+        parts: parts
+      });
       
-      // 发送工具结果并处理 Gemini 的后续响应
-      await this.processStreamEvents(toolResultParts, res);
+      // 发送完成事件，结束对话
+      this.streamingEventService.sendCompleteEvent(res);
     }
   }
 

@@ -137,17 +137,31 @@ class ChatService: ObservableObject {
         case .toolConfirmation(let data):
             // 处理工具确认请求 - 添加到队列
             print("收到工具请求，\(data)")
+            
+            // 根据工具名称确定确认类型
+            let confirmationType: ToolConfirmationType
+            switch data.name {
+            case .writeFile, .replace, .edit:
+                confirmationType = .edit
+            case .executeCommand:
+                confirmationType = .exec
+            default:
+                confirmationType = .info
+            }
+            
             let confirmationEvent = ToolConfirmationEvent(
                 type: "tool_confirmation",
                 callId: data.callId,
                 toolName: data.name,
                 confirmationDetails: ToolConfirmationDetails(
-                    type: .exec,
+                    type: confirmationType,
                     title: "需要确认工具调用: \(data.displayName)",
                     command: data.command,
                     rootCommand: nil,
-                    fileName: nil,
-                    fileDiff: nil,
+                    fileName: data.args.filePath,
+                    oldStr: data.args.oldString,
+                    newStr: data.args.newString,
+                    content: data.args.content,
                     prompt: data.prompt,
                     urls: nil,
                     serverName: nil,

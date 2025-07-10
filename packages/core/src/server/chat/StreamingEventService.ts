@@ -63,7 +63,8 @@ export class StreamingEventService {
     res: express.Response,
     callId: string,
     name: string,
-    command?: string
+    command?: string,
+    args?: Record<string, any>
   ): void {
     const event = StreamingEventFactory.createToolConfirmationEvent(
       callId,
@@ -71,7 +72,8 @@ export class StreamingEventService {
       name, // displayName
       `需要确认工具调用: ${name}`,
       `是否执行工具调用: ${name}`,
-      command || undefined
+      command || undefined,
+      args
     );
     this.writeEvent(res, event);
   }

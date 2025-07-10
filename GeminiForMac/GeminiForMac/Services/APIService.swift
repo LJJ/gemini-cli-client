@@ -31,6 +31,12 @@ struct ToolCall: Codable {
 // MARK: - API服务类
 final class APIService:Sendable {
     private let baseURL = "http://localhost:8080"
+    private let decoder:JSONDecoder
+    init(){
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        self.decoder = decoder
+    }
     
     // 检查服务器状态
     func checkServerStatus() async -> Bool {
@@ -70,7 +76,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(MessageResponse.self, from: data)
+            return try decoder.decode(MessageResponse.self, from: data)
         } catch {
             print("解析响应失败: \(error)")
             return nil
@@ -140,7 +146,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(ToolConfirmationResponse.self, from: data)
+            return try decoder.decode(ToolConfirmationResponse.self, from: data)
         } catch {
             print("解析工具确认响应失败: \(error)")
             return nil
@@ -176,7 +182,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(AuthResponse.self, from: data)
+            return try decoder.decode(AuthResponse.self, from: data)
         } catch {
             print("解析认证配置响应失败: \(error)")
             return nil
@@ -193,7 +199,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(AuthResponse.self, from: data)
+            return try decoder.decode(AuthResponse.self, from: data)
         } catch {
             print("解析Google登录响应失败: \(error)")
             return nil
@@ -206,7 +212,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            return try JSONDecoder().decode(AuthStatusResponse.self, from: data)
+            return try decoder.decode(AuthStatusResponse.self, from: data)
         } catch {
             print("解析认证状态响应失败: \(error)")
             return nil
@@ -223,7 +229,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(AuthResponse.self, from: data)
+            return try decoder.decode(AuthResponse.self, from: data)
         } catch {
             print("解析登出响应失败: \(error)")
             return nil
@@ -240,7 +246,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(AuthResponse.self, from: data)
+            return try decoder.decode(AuthResponse.self, from: data)
         } catch {
             print("解析清除认证响应失败: \(error)")
             return nil
@@ -255,7 +261,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            return try JSONDecoder().decode(DirectoryResponse.self, from: data)
+            return try decoder.decode(DirectoryResponse.self, from: data)
         } catch {
             print("解析目录列表响应失败: \(error)")
             return nil
@@ -275,7 +281,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(FileResponse.self, from: data)
+            return try decoder.decode(FileResponse.self, from: data)
         } catch {
             print("解析文件读取响应失败: \(error)")
             return nil
@@ -298,7 +304,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(FileResponse.self, from: data)
+            return try decoder.decode(FileResponse.self, from: data)
         } catch {
             print("解析文件写入响应失败: \(error)")
             return nil
@@ -322,7 +328,7 @@ final class APIService:Sendable {
         
         do {
             let (data, _) = try await URLSession.shared.data(for: request)
-            return try JSONDecoder().decode(CommandResponse.self, from: data)
+            return try decoder.decode(CommandResponse.self, from: data)
         } catch {
             print("解析命令执行响应失败: \(error)")
             return nil

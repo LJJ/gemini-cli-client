@@ -135,7 +135,7 @@ struct ThoughtEventData: Codable {
 // 3. 工具调用事件数据
 struct ToolCallEventData: Codable {
     let callId: String
-    let name: String
+    let name: ToolName
     let displayName: String
     let description: String
     let args: [String: String]
@@ -159,7 +159,7 @@ enum ToolExecutionStatus: String, Codable {
 // 5. 工具结果事件数据
 struct ToolResultEventData: Codable {
     let callId: String
-    let name: String
+    let name: ToolName
     let result: String
     let displayResult: String
     let success: Bool
@@ -169,11 +169,19 @@ struct ToolResultEventData: Codable {
 // 6. 工具确认事件数据
 struct ToolConfirmationEventData: Codable {
     let callId: String
-    let name: String
+    let name: ToolName
     let displayName: String
     let description: String
     let prompt: String
     let command: String?
+    let args: CommandArgs
+}
+
+struct CommandArgs:Codable {
+    let oldString:String?
+    let newString:String?
+    let filePath:String
+    let content:String?
 }
 
 // 7. 完成事件数据
@@ -197,7 +205,9 @@ extension StreamEvent {
         guard let data = jsonString.data(using: .utf8) else { return nil }
         
         do {
-            let event = try JSONDecoder().decode(StreamEvent.self, from: data)
+            let jsonDecoder = JSONDecoder()
+            jsonDecoder.keyDecodingStrategy = .convertFromSnakeCase
+            let event = try jsonDecoder.decode(StreamEvent.self, from: data)
             return event
         } catch {
             print("解析流式事件失败: \(error)")

@@ -79,6 +79,7 @@ export interface ToolConfirmationEventData {
   description: string;
   prompt: string;
   command?: string;
+  args?: Record<string, any>;
 }
 
 // 7. 完成事件数据
@@ -160,11 +161,12 @@ export class StreamingEventFactory {
     displayName: string,
     description: string,
     prompt: string,
-    command?: string
+    command?: string,
+    args?: Record<string, any>
   ): StreamingEvent {
     return {
       type: 'tool_confirmation',
-      data: { callId, name, displayName, description, prompt, command },
+      data: { callId, name, displayName, description, prompt, command, args },
       timestamp: new Date().toISOString()
     };
   }

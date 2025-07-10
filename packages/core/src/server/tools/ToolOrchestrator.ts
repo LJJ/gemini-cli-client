@@ -153,7 +153,8 @@ export class ToolOrchestrator {
               this.currentResponse,
               toolCall.request.callId,
               toolCall.request.name,
-              typeof toolCall.request.args?.command === 'string' ? toolCall.request.args.command : undefined
+              typeof toolCall.request.args?.command === 'string' ? toolCall.request.args.command : undefined,
+              toolCall.request.args
             );
             // 记录已发送的确认事件
             this.sentConfirmationEvents.add(toolCall.request.callId);
