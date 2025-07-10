@@ -169,12 +169,7 @@ class ChatService: ObservableObject {
     func handleToolConfirmation(outcome: ToolConfirmationOutcome) async {
         guard let confirmation = pendingToolConfirmation else { return }
         
-        // 添加确认消息
-        let confirmationMessage = ChatMessage(
-            content: "✅ 已确认工具调用: \(confirmation.toolName)",
-			type: .thinking
-        )
-        messages.append(confirmationMessage)
+        print("tool call confirmed \(outcome)")
         
         // 发送确认到服务器
         if let response = await apiService.sendToolConfirmation(
@@ -182,12 +177,6 @@ class ChatService: ObservableObject {
             outcome: outcome
         ) {
             if response.success {
-                // 添加成功消息
-                let successMessage = ChatMessage(
-                    content: "🔄 正在执行工具调用...",
-					type: .thinking
-                )
-                messages.append(successMessage)
                 
                 // 等待一段时间，让服务器处理工具调用
                 try? await Task.sleep(nanoseconds: 1_000_000_000) // 1秒

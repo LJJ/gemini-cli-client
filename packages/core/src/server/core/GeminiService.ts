@@ -11,6 +11,8 @@ import { StreamingEventService } from '../chat/StreamingEventService.js';
 import { ToolOrchestrator } from '../tools/ToolOrchestrator.js';
 import { ChatHandler } from '../chat/ChatHandler.js';
 import { AuthService } from '../auth/AuthService.js';
+import { ToolConfirmationRequest } from '../types/api-types.js';
+import { ToolConfirmationOutcome } from '../../tools/tools.js';
 
 /**
  * Gemini 服务 - 主要协调器
@@ -68,22 +70,48 @@ export class GeminiService {
 
   public async handleToolConfirmation(req: express.Request, res: express.Response) {
     try {
-      const { toolCallId, approved } = req.body;
+      const { callId, outcome }: ToolConfirmationRequest = req.body;
       
-      if (!toolCallId || typeof approved !== 'boolean') {
-        return res.status(400).json(ResponseFactory.validationError('toolCallId/approved', 'Tool call ID and approval status are required'));
+      // 验证 callId
+      if (!callId || typeof callId !== 'string') {
+        return res.status(400).json(ResponseFactory.validationError('callId', 'Tool call ID is required and must be a string'));
+      }
+
+      // 验证 outcome 枚举值
+      const validOutcomes = Object.values(ToolConfirmationOutcome);
+      if (!outcome || !validOutcomes.includes(outcome as ToolConfirmationOutcome)) {
+        return res.status(400).json(ResponseFactory.validationError('outcome', `Outcome must be one of: ${validOutcomes.join(', ')}`));
       }
 
       // 委托给工具协调器处理
       const abortController = new AbortController();
-      await this.toolOrchestrator.handleToolConfirmation(toolCallId, approved, abortController.signal);
+      await this.toolOrchestrator.handleToolConfirmation(callId, outcome as ToolConfirmationOutcome, abortController.signal);
       
       res.json(ResponseFactory.success({
-        message: approved ? '工具调用已批准' : '工具调用已拒绝'
+        message: this.getOutcomeMessage(outcome as ToolConfirmationOutcome)
       }));
       
     } catch (error) {
       res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }
+
+  private getOutcomeMessage(outcome: ToolConfirmationOutcome): string {
+    switch (outcome) {
+      case ToolConfirmationOutcome.ProceedOnce:
+        return '工具调用已批准（仅此次）';
+      case ToolConfirmationOutcome.ProceedAlways:
+        return '工具调用已批准（始终允许）';
+      case ToolConfirmationOutcome.ProceedAlwaysServer:
+        return '工具调用已批准（始终允许该服务器）';
+      case ToolConfirmationOutcome.ProceedAlwaysTool:
+        return '工具调用已批准（始终允许该工具）';
+      case ToolConfirmationOutcome.ModifyWithEditor:
+        return '工具调用将通过编辑器修改';
+      case ToolConfirmationOutcome.Cancel:
+        return '工具调用已取消';
+      default:
+        return '工具调用处理完成';
     }
   }
 

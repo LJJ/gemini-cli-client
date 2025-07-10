@@ -8,6 +8,7 @@ import { Config } from '../../index.js';
 import { CoreToolScheduler, CompletedToolCall, ToolCall } from '../../core/coreToolScheduler.js';
 import { ToolCallRequestInfo } from '../../core/turn.js';
 import { ApprovalMode } from '../../config/config.js';
+import { ToolConfirmationOutcome } from '../../tools/tools.js';
 import express from 'express';
 import { StreamingEventService } from '../chat/StreamingEventService.js';
 
@@ -72,11 +73,17 @@ export class ToolOrchestrator {
 
   public async handleToolConfirmation(
     callId: string,
-    outcome: any,
+    outcome: ToolConfirmationOutcome,
     abortSignal: AbortSignal
   ): Promise<void> {
     if (!this.toolScheduler) {
       throw new Error('Tool scheduler not initialized');
+    }
+
+    // 验证 outcome 值的有效性
+    const validOutcomes = Object.values(ToolConfirmationOutcome);
+    if (!validOutcomes.includes(outcome)) {
+      throw new Error(`Invalid outcome value: ${outcome}. Must be one of: ${validOutcomes.join(', ')}`);
     }
 
     // 获取工具调用
@@ -86,6 +93,9 @@ export class ToolOrchestrator {
     if (!toolCall || toolCall.status !== 'awaiting_approval') {
       throw new Error('Tool call not found or not awaiting approval');
     }
+
+    // 记录工具确认决策（用于调试和监控）
+    console.log(`工具确认决策: callId=${callId}, toolName=${toolCall.request.name}, outcome=${outcome}`);
 
     // 使用 CoreToolScheduler 的确认处理
     await this.toolScheduler.handleConfirmationResponse(
@@ -135,7 +145,22 @@ export class ToolOrchestrator {
             'executing',
             `正在执行 ${toolCall.request.name}...`
           );
+        } else if (toolCall.status === 'cancelled') {
+          this.streamingEventService.sendToolExecutionEvent(
+            this.currentResponse,
+            toolCall.request.callId,
+            'failed',
+            `工具调用已取消: ${toolCall.request.name}`
+          );
+        } else if (toolCall.status === 'error') {
+          this.streamingEventService.sendToolExecutionEvent(
+            this.currentResponse,
+            toolCall.request.callId,
+            'failed',
+            `工具调用失败: ${toolCall.request.name}`
+          );
         }
+        // 注意: success 状态通过 handleAllToolCallsComplete 处理
       }
     }
   }
