@@ -8,6 +8,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { getOauthClient, clearCachedCredentialFile } from '../../code_assist/oauth2.js';
+import { AuthType } from '../../core/contentGenerator.js';
 
 /**
  * OAuth管理器 - 负责OAuth凭据的验证和管理
@@ -80,7 +81,7 @@ export class OAuthManager {
       // OAuth2Client会自动处理令牌刷新逻辑
       try {
         console.log('尝试初始化OAuth客户端（会自动处理令牌刷新）...');
-        await getOauthClient();
+        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE);
         console.log('✅ OAuth凭据验证成功');
         return true;
       } catch (oauthError) {
@@ -111,7 +112,7 @@ export class OAuthManager {
       setTimeout(() => reject(new Error('OAuth 初始化超时')), timeoutMs);
     });
     
-    const oauthPromise = getOauthClient();
+    const oauthPromise = getOauthClient(AuthType.LOGIN_WITH_GOOGLE);
     
     await Promise.race([oauthPromise, timeoutPromise]);
     console.log('OAuth客户端初始化成功');

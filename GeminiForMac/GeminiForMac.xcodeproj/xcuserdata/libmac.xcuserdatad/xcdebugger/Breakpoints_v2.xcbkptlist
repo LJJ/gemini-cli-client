@@ -34,50 +34,6 @@
             endingLineNumber = "175"
             landmarkName = "handleToolConfirmation(outcome:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "7501D04C-5ED7-4817-AAA9-8CB9F71913AD - 852132ca81e4f6f4"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(1) suspend resume partial function for GeminiForMac.ChatService.handleToolConfirmation(outcome: GeminiForMac.ToolConfirmationOutcome) async -&gt; ()"
-                  moduleName = "GeminiForMac.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/libmac/workplace/AI/gemini-cli/GeminiForMac/GeminiForMac/Services/ChatService.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "175"
-                  endingLineNumber = "175">
-               </Location>
-               <Location
-                  uuid = "7501D04C-5ED7-4817-AAA9-8CB9F71913AD - 620ac98d77d532f6"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(3) suspend resume partial function for GeminiForMac.ChatService.handleToolConfirmation(outcome: GeminiForMac.ToolConfirmationOutcome) async -&gt; ()"
-                  moduleName = "GeminiForMac.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/libmac/workplace/AI/gemini-cli/GeminiForMac/GeminiForMac/Services/ChatService.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "175"
-                  endingLineNumber = "175">
-               </Location>
-               <Location
-                  uuid = "7501D04C-5ED7-4817-AAA9-8CB9F71913AD - 620ac98d77d532f6"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(3) suspend resume partial function for GeminiForMac.ChatService.handleToolConfirmation(outcome: GeminiForMac.ToolConfirmationOutcome) async -&gt; ()"
-                  moduleName = "GeminiForMac.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/libmac/workplace/AI/gemini-cli/GeminiForMac/GeminiForMac/Services/ChatService.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "175"
-                  endingLineNumber = "175">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

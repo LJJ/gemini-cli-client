@@ -45,7 +45,7 @@ export class ResponseFactory {
    */
   static authStatus(data: {
     isAuthenticated: boolean;
-    authType: 'gemini-api-key' | 'oauth-personal' | 'vertex-ai' | null;
+    authType: string | null;
     hasApiKey: boolean;
     hasGoogleCloudConfig: boolean;
   }) {

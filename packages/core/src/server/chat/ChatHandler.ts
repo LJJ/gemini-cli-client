@@ -65,7 +65,8 @@ export class ChatHandler {
 
       // 创建 Turn 和中止信号
       const chat = geminiClient.getChat();
-      this.currentTurn = new Turn(chat);
+      const prompt_id = config.getSessionId() + '########' + Date.now();
+      this.currentTurn = new Turn(chat, prompt_id);
       this.abortController = new AbortController();
       
       // 处理流式响应（可能包含多轮对话）
@@ -227,8 +228,10 @@ export class ChatHandler {
 
     // 创建新的 Turn 来处理工具结果
     const chat = this.clientManager.getClient()?.getChat();
-    if (chat) {
-      this.currentTurn = new Turn(chat);
+    const config = this.clientManager.getConfig();
+    if (chat && config) {
+      const prompt_id = config.getSessionId() + '########' + Date.now();
+      this.currentTurn = new Turn(chat, prompt_id);
       
       // 发送工具结果并处理 Gemini 的后续响应
       await this.processStreamEvents(toolResultParts, res);

@@ -559,3 +559,8 @@ export class Config {
 }
 // Export model constants for use in CLI
 export { DEFAULT_GEMINI_FLASH_MODEL };
+
+// Export createToolRegistry function for use in other modules
+export async function createToolRegistry(config: Config): Promise<ToolRegistry> {
+  return config.createToolRegistry();
+}
