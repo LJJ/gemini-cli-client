@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Turn, ServerGeminiStreamEvent, GeminiEventType } from '../core/turn.js';
-import { ToolCallRequestInfo } from '../core/turn.js';
+import { Turn, ServerGeminiStreamEvent, GeminiEventType } from '../../core/turn.js';
+import { ToolCallRequestInfo } from '../../core/turn.js';
 import express from 'express';
 import { StreamingEventService } from './StreamingEventService.js';
-import { ToolOrchestrator } from './ToolOrchestrator.js';
-import { ClientManager } from './ClientManager.js';
+import { ToolOrchestrator } from '../tools/ToolOrchestrator.js';
+import { ClientManager } from '../core/ClientManager.js';
 
 /**
  * 聊天处理器 - 负责聊天消息的处理和流式响应

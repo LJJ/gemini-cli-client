@@ -1,166 +1,89 @@
-# Gemini CLI API Server 架构
+# Server 模块重构说明
 
-## 🎯 设计原则
+## 目录结构
 
-本服务器严格按照 **SOLID 设计原则** 进行重构，确保代码的可维护性、可扩展性和可测试性。每个类都有明确的单一职责，避免了巨大的单体服务。
-
-## 🏗️ 新架构概览
+根据SOLID原则和单一职责原则，server模块已重新组织为以下结构：
 
 ```
-packages/core/src/server/
-├── GeminiService.ts           # 🎭 主协调器 (94行)
-├── ClientManager.ts           # 🔧 客户端管理 (95行)
-├── StreamingEventService.ts   # 📡 事件流服务 (111行)
-├── ToolOrchestrator.ts        # 🛠️ 工具协调器 (119行)
-├── ChatHandler.ts             # 💬 聊天处理器 (135行)
-├── AuthService.ts             # 🔐 认证服务
-├── FileService.ts             # 📁 文件服务
-└── CommandService.ts          # ⚡ 命令服务
+server/
+├── auth/           # 认证相关服务
+│   ├── index.ts
+│   ├── AuthService.ts      # 主要认证服务
+│   ├── AuthConfigManager.ts # 认证配置管理
+│   ├── OAuthManager.ts     # OAuth流程管理
+│   └── AuthValidator.ts    # 认证验证
+├── chat/           # 聊天相关服务
+│   ├── index.ts
+│   ├── ChatHandler.ts      # 聊天消息处理
+│   └── StreamingEventService.ts # 流式事件服务
+├── tools/          # 工具相关服务
+│   ├── index.ts
+│   ├── ToolOrchestrator.ts # 工具协调器
+│   └── CommandService.ts   # 命令执行服务
+├── files/          # 文件相关服务
+│   ├── index.ts
+│   └── FileService.ts      # 文件操作服务
+├── core/           # 核心服务
+│   ├── index.ts
+│   ├── GeminiService.ts    # 主要协调服务
+│   ├── ClientManager.ts    # 客户端管理
+│   └── ServerConfig.ts     # 服务器配置
+├── types/          # 类型定义
+│   └── streaming-events.ts
+├── utils/          # 工具类
+│   └── responseFactory.ts
+├── docs/           # 文档
+└── index.ts        # 主入口文件
 ```
 
-## 📋 职责分离 (单一职责原则)
+## 职责分离
 
-### 🎭 GeminiService - 主协调器 (94行)
-**单一职责**: 服务组合和HTTP请求路由
-- ✅ 依赖注入管理
-- ✅ HTTP 请求处理
-- ✅ 高级别错误处理
-- ✅ 服务间协调
+### Auth 模块 (认证)
+- **AuthService**: 认证流程协调，HTTP请求处理，认证状态管理
+- **AuthConfigManager**: 认证配置的持久化和加载
+- **OAuthManager**: OAuth流程的具体实现
+- **AuthValidator**: 认证参数的验证
 
-### 🔧 ClientManager - 客户端管理器 (95行)
-**单一职责**: Gemini客户端生命周期管理
-- ✅ 客户端初始化
-- ✅ 配置管理
-- ✅ 认证处理
-- ✅ CodeAssist 降级逻辑
+### Chat 模块 (聊天)
+- **ChatHandler**: 聊天消息处理，流式响应管理，事件分发
+- **StreamingEventService**: 结构化事件创建和发送
 
-### 📡 StreamingEventService - 事件流服务 (111行)
-**单一职责**: 流式事件的创建和发送
-- ✅ 结构化事件创建
-- ✅ 流式响应发送
-- ✅ 事件格式化
-- ✅ 响应头设置
+### Tools 模块 (工具)
+- **ToolOrchestrator**: 工具调用的调度和状态管理
+- **CommandService**: 命令执行服务
 
-### 🛠️ ToolOrchestrator - 工具协调器 (119行)
-**单一职责**: 工具调用的调度和状态管理
-- ✅ 工具调度管理
-- ✅ 工具确认处理
-- ✅ 工具状态更新
-- ✅ 与前端事件同步
+### Files 模块 (文件)
+- **FileService**: 文件读写、目录列表等文件操作
 
-### 💬 ChatHandler - 聊天处理器 (135行)
-**单一职责**: 聊天消息的处理和流式响应
-- ✅ 聊天消息处理
-- ✅ 流式响应管理
-- ✅ 事件分发
-- ✅ Turn 生命周期管理
+### Core 模块 (核心)
+- **GeminiService**: 服务组合和协调，HTTP请求处理
+- **ClientManager**: Gemini客户端初始化和管理
+- **ServerConfig**: 服务器配置管理
 
-## 🎉 重构成果
+## 设计原则
 
-### 📊 代码规模对比
-| 组件 | 重构前 | 重构后 | 减少 |
-|-----|--------|--------|------|
-| **GeminiService** | 509行 | 94行 | **-81%** |
-| **总体复杂度** | 单体服务 | 5个小服务 | **职责明确** |
-| **可维护性** | 困难 | 简单 | **极大提升** |
+1. **单一职责原则**: 每个文件只负责一个特定的功能领域
+2. **开闭原则**: 通过接口和抽象类支持扩展
+3. **依赖倒置**: 高层模块不依赖低层模块，都依赖抽象
+4. **接口隔离**: 客户端不应该依赖它不需要的接口
+5. **组合优于继承**: 使用组合来构建复杂功能
 
-### ✨ SOLID 原则实现
-
-#### 1️⃣ **单一职责原则 (SRP)** ✅
-- 每个服务类只负责一个特定领域
-- `GeminiService`: 协调 (94行)
-- `ClientManager`: 客户端管理 (95行)
-- `StreamingEventService`: 事件处理 (111行)
-- `ToolOrchestrator`: 工具管理 (119行)
-- `ChatHandler`: 聊天处理 (135行)
-
-#### 2️⃣ **开闭原则 (OCP)** ✅
-- 对扩展开放，对修改封闭
-- 新功能通过组合新服务实现
-- 现有服务无需修改
-
-#### 3️⃣ **里氏替换原则 (LSP)** ✅
-- 所有服务类都可独立替换
-- 接口一致性保证
-
-#### 4️⃣ **接口隔离原则 (ISP)** ✅
-- 每个服务提供专门的接口
-- 避免胖接口
-
-#### 5️⃣ **依赖倒置原则 (DIP)** ✅
-- 通过构造函数依赖注入
-- 高层模块不依赖低层模块
-
-## 🔄 依赖关系图
-
-```mermaid
-graph TD
-    A[GeminiService] --> B[ClientManager]
-    A --> C[StreamingEventService] 
-    A --> D[ToolOrchestrator]
-    A --> E[ChatHandler]
-    
-    D --> C
-    E --> B
-    E --> C
-    E --> D
-    
-    B --> F[AuthService]
-```
-
-## 🚀 使用示例
+## 导入方式
 
 ```typescript
-// 依赖注入 - 自动组装所有服务
-const geminiService = new GeminiService(authService);
+// 导入特定模块
+import { AuthService } from './auth/index.js';
+import { ChatHandler } from './chat/index.js';
+import { ToolOrchestrator } from './tools/index.js';
 
-// 处理聊天请求 - 内部自动协调各个服务
-await geminiService.handleChat(req, res);
-
-// 处理工具确认 - 委托给专门的协调器
-await geminiService.handleToolConfirmation(req, res);
+// 或者从主入口导入
+import { AuthService, ChatHandler, ToolOrchestrator } from './index.js';
 ```
 
-## 🧪 测试策略
+## 重构优势
 
-### 单元测试
-- ✅ 每个服务类独立测试
-- ✅ 依赖通过 Mock 注入
-- ✅ 职责明确，测试简单
-
-### 集成测试
-- ✅ 服务间交互测试
-- ✅ 端到端流程验证
-
-## 🎯 扩展指南
-
-### 添加新功能
-1. 📝 确定职责归属
-2. 🔧 选择合适的服务扩展
-3. 🧪 添加单元测试
-4. 📚 更新文档
-
-### 添加新服务
-1. 🏗️ 创建专职服务类
-2. 🔌 在 `GeminiService` 中注入
-3. 🧪 编写完整测试
-4. 📖 更新架构图
-
-## 📈 性能优化
-
-- ⚡ 服务实例复用
-- 🔄 异步处理避免阻塞
-- 🛡️ 完善的错误处理
-- 📊 结构化日志记录
-
-## 🏆 总结
-
-通过这次重构，我们将一个 **509行的巨大服务** 拆分成了 **5个职责明确的小服务**，每个都不超过 **150行**，完全符合SOLID原则：
-
-- ✅ **可维护性**: 从困难变为简单
-- ✅ **可测试性**: 每个组件独立可测
-- ✅ **可扩展性**: 新功能通过组合实现
-- ✅ **可读性**: 职责明确，代码清晰
-- ✅ **复用性**: 服务可独立复用
-
-这是 **SOLID设计原则** 的完美实践！🎉 
+1. **更好的可维护性**: 相关功能集中在同一目录
+2. **更清晰的职责**: 每个文件都有明确的单一职责
+3. **更容易测试**: 可以独立测试每个模块
+4. **更好的扩展性**: 新功能可以添加到相应的模块中
+5. **减少耦合**: 模块间通过明确的接口进行交互 

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Config } from '../index.js';
-import { CoreToolScheduler, CompletedToolCall, ToolCall } from '../core/coreToolScheduler.js';
-import { ToolCallRequestInfo } from '../core/turn.js';
-import { ApprovalMode } from '../config/config.js';
+import { Config } from '../../index.js';
+import { CoreToolScheduler, CompletedToolCall, ToolCall } from '../../core/coreToolScheduler.js';
+import { ToolCallRequestInfo } from '../../core/turn.js';
+import { ApprovalMode } from '../../config/config.js';
 import express from 'express';
-import { StreamingEventService } from './StreamingEventService.js';
+import { StreamingEventService } from '../chat/StreamingEventService.js';
 
 /**
  * 工具协调器 - 负责工具调用的调度和状态管理

@@ -5,12 +5,12 @@
  */
 
 import express from 'express';
-import { ResponseFactory } from './utils/responseFactory.js';
+import { ResponseFactory } from '../utils/responseFactory.js';
 import { ClientManager } from './ClientManager.js';
-import { StreamingEventService } from './StreamingEventService.js';
-import { ToolOrchestrator } from './ToolOrchestrator.js';
-import { ChatHandler } from './ChatHandler.js';
-import { AuthService } from './AuthService.js';
+import { StreamingEventService } from '../chat/StreamingEventService.js';
+import { ToolOrchestrator } from '../tools/ToolOrchestrator.js';
+import { ChatHandler } from '../chat/ChatHandler.js';
+import { AuthService } from '../auth/AuthService.js';
 
 /**
  * Gemini 服务 - 主要协调器

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ServerConfig } from './server/ServerConfig.js';
-import { GeminiService } from './server/GeminiService.js';
-import { FileService } from './server/FileService.js';
-import { CommandService } from './server/CommandService.js';
-import { AuthService } from './server/AuthService.js';
+import { ServerConfig } from './server/core/ServerConfig.js';
+import { GeminiService } from './server/core/GeminiService.js';
+import { FileService } from './server/files/FileService.js';
+import { CommandService } from './server/tools/CommandService.js';
+import { AuthService } from './server/auth/AuthService.js';
 
 export class APIServer {
   private serverConfig: ServerConfig;

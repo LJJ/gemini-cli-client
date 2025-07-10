@@ -4,22 +4,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// 主要服务
-export { GeminiService } from './GeminiService.js';
-export { AuthService } from './AuthService.js';
-export { FileService } from './FileService.js';
-export { CommandService } from './CommandService.js';
+// 核心服务
+export * from './core/index.js';
 
-// 新的模块化服务
-export { ClientManager } from './ClientManager.js';
-export { StreamingEventService } from './StreamingEventService.js';
-export { ToolOrchestrator } from './ToolOrchestrator.js';
-export { ChatHandler } from './ChatHandler.js';
+// 认证服务
+export * from './auth/index.js';
 
-// 认证模块
-export { AuthConfigManager } from './auth/AuthConfigManager.js';
-export { OAuthManager } from './auth/OAuthManager.js';
-export { AuthValidator } from './auth/AuthValidator.js';
+// 文件服务
+export * from './files/index.js';
+
+// 聊天服务
+export * from './chat/index.js';
+
+// 工具服务
+export * from './tools/index.js';
 
 // 工具类
 export { ResponseFactory } from './utils/responseFactory.js';

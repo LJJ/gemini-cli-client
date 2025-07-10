@@ -7,7 +7,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import express from 'express';
-import { ResponseFactory } from './utils/responseFactory.js';
+import { ResponseFactory } from '../utils/responseFactory.js';
 
 export class FileService {
   public async listDirectory(req: express.Request, res: express.Response) {

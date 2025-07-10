@@ -5,11 +5,11 @@
  */
 
 import express from 'express';
-import { AuthType, createContentGeneratorConfig } from '../core/contentGenerator.js';
-import { ResponseFactory } from './utils/responseFactory.js';
-import { AuthConfigManager } from './auth/AuthConfigManager.js';
-import { OAuthManager } from './auth/OAuthManager.js';
-import { AuthValidator } from './auth/AuthValidator.js';
+import { AuthType, createContentGeneratorConfig } from '../../core/contentGenerator.js';
+import { ResponseFactory } from '../utils/responseFactory.js';
+import { AuthConfigManager } from './AuthConfigManager.js';
+import { OAuthManager } from './OAuthManager.js';
+import { AuthValidator } from './AuthValidator.js';
 
 /**
  * 认证服务 - 主要协调器

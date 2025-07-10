@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Config, GeminiClient } from '../index.js';
-import { createToolRegistry } from '../config/config.js';
-import { AuthService } from './AuthService.js';
+import { Config, GeminiClient } from '../../index.js';
+import { createToolRegistry } from '../../config/config.js';
+import { AuthService } from '../auth/AuthService.js';
 
 /**
  * 客户端管理器 - 负责 Gemini 客户端的初始化和管理

@@ -7,7 +7,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import express from 'express';
-import { ResponseFactory } from './utils/responseFactory.js';
+import { ResponseFactory } from '../utils/responseFactory.js';
 
 const execAsync = promisify(exec);
 
