@@ -7,36 +7,23 @@
 
 import SwiftUI
 import Foundation
+import MarkdownUI
 
 struct MarkdownTextView: View {
     let text: String
     
     var body: some View {
-        Text(attributedString)
-            .font(.body)
-            .foregroundColor(.primary)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    
-    private var attributedString: AttributedString {
-        do {
-            // 尝试将 Markdown 转换为 AttributedString
-            var attributedString = try AttributedString(markdown: text)
-            
-            // 设置基本样式
-            attributedString.font = .body
-            
-            // 为代码块添加特殊样式
-            attributedString.foregroundColor = .primary
-            
-            return attributedString
-        } catch {
-            // 如果 Markdown 解析失败，返回普通文本
-            var fallbackString = AttributedString(text)
-            fallbackString.font = .body
-            return fallbackString
+        ScrollView {
+            Markdown(text)
+				.markdownTextStyle(textStyle: {
+					BackgroundColor(nil)
+				})
+                .markdownTheme(.gitHub)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -48,11 +35,12 @@ struct MarkdownTextView: View {
         
         MarkdownTextView(text: "*这是斜体文本*")
         
-        MarkdownTextView(text: "`这是代码`")
+        MarkdownTextView(text: "`这是行内代码`")
         
         MarkdownTextView(text: """
         # 标题 1
         ## 标题 2
+        ### 标题 3
         
         这是一个段落。
         
@@ -69,6 +57,16 @@ struct MarkdownTextView: View {
             print("Hello, World!")
         }
         ```
+        """)
+        
+        MarkdownTextView(text: """
+        > 这是一个引用块
+        > 可以包含多行内容
+        
+        | 表头1 | 表头2 |
+        |-------|-------|
+        | 单元格1 | 单元格2 |
+        | 单元格3 | 单元格4 |
         """)
     }
     .padding()
