@@ -10,6 +10,7 @@ import express from 'express';
 import { StreamingEventService } from './StreamingEventService.js';
 import { ToolOrchestrator } from '../tools/ToolOrchestrator.js';
 import { ClientManager } from '../core/ClientManager.js';
+import { CompletedToolCall } from '../../core/coreToolScheduler.js';
 
 /**
  * 聊天处理器 - 负责聊天消息的处理和流式响应
@@ -19,10 +20,14 @@ import { ClientManager } from '../core/ClientManager.js';
  * - 流式响应管理
  * - 事件分发
  * - Turn 生命周期管理
+ * - 工具调用结果处理
  */
 export class ChatHandler {
   private currentTurn: Turn | null = null;
   private abortController: AbortController | null = null;
+  private pendingToolCalls: Map<string, ToolCallRequestInfo> = new Map();
+  private completedToolCalls: CompletedToolCall[] = [];
+  private waitingForToolCompletion = false;
 
   constructor(
     private clientManager: ClientManager,
@@ -55,13 +60,16 @@ export class ChatHandler {
       // 初始化工具协调器
       await this.toolOrchestrator.initializeScheduler(config);
 
+      // 设置工具调用完成回调
+      this.toolOrchestrator.setToolCompletionCallback(this.handleToolCallsComplete.bind(this));
+
       // 创建 Turn 和中止信号
       const chat = geminiClient.getChat();
       this.currentTurn = new Turn(chat);
       this.abortController = new AbortController();
       
-      // 处理流式响应
-      await this.processStreamEvents(fullMessage, res);
+      // 处理流式响应（可能包含多轮对话）
+      await this.processConversationWithTools(fullMessage, res);
       
       // 发送完成事件
       this.streamingEventService.sendCompleteEvent(res);
@@ -78,15 +86,33 @@ export class ChatHandler {
       res.end();
     } finally {
       this.toolOrchestrator.clearCurrentResponse();
+      this.resetState();
     }
   }
 
-  private async processStreamEvents(message: string, res: express.Response): Promise<void> {
+  private async processConversationWithTools(message: string, res: express.Response): Promise<void> {
+    const messageParts = [{ text: message }];
+    
+    // 处理初始消息
+    await this.processStreamEvents(messageParts, res);
+    
+    // 如果有工具调用，等待完成后继续对话
+    while (this.waitingForToolCompletion) {
+      console.log('等待工具调用完成...');
+      await this.waitForToolCompletion();
+      
+      if (this.completedToolCalls.length > 0) {
+        console.log('工具调用完成，发送结果回 Gemini...');
+        await this.processToolResults(res);
+        this.completedToolCalls = [];
+      }
+    }
+  }
+
+  private async processStreamEvents(messageParts: any[], res: express.Response): Promise<void> {
     if (!this.currentTurn || !this.abortController) {
       throw new Error('Turn or AbortController not initialized');
     }
-
-    const messageParts = [{ text: message }];
     
     for await (const event of this.currentTurn.run(messageParts, this.abortController.signal)) {
       console.log('收到事件:', event.type);
@@ -117,7 +143,7 @@ export class ChatHandler {
             res,
             event.value.error.message,
             'GEMINI_ERROR',
-                         event.value.error.status?.toString()
+            event.value.error.status?.toString()
           );
           break;
           
@@ -139,11 +165,80 @@ export class ChatHandler {
 
     console.log('收到工具调用请求:', request);
     
+    // 记录待处理的工具调用
+    this.pendingToolCalls.set(request.callId, request);
+    this.waitingForToolCompletion = true;
+    
     await this.toolOrchestrator.scheduleToolCall(
       request,
       this.abortController.signal,
       res
     );
+  }
+
+  private async handleToolCallsComplete(completedCalls: CompletedToolCall[]): Promise<void> {
+    console.log('ChatHandler: 收到工具调用完成通知', completedCalls.length);
+    
+    // 保存完成的工具调用
+    this.completedToolCalls = completedCalls;
+    this.waitingForToolCompletion = false;
+    
+    // 清理待处理的工具调用
+    for (const call of completedCalls) {
+      this.pendingToolCalls.delete(call.request.callId);
+    }
+  }
+
+  private async waitForToolCompletion(): Promise<void> {
+    return new Promise((resolve) => {
+      const checkCompletion = () => {
+        if (!this.waitingForToolCompletion) {
+          resolve();
+        } else {
+          setTimeout(checkCompletion, 100);
+        }
+      };
+      checkCompletion();
+    });
+  }
+
+  private async processToolResults(res: express.Response): Promise<void> {
+    if (!this.currentTurn || !this.abortController) {
+      throw new Error('Turn or AbortController not initialized');
+    }
+
+    // 构建工具结果作为新的消息部分
+    const toolResultParts = this.completedToolCalls.map(call => {
+      if (call.status === 'success' && call.response) {
+        return call.response.responseParts;
+      } else if (call.status === 'error') {
+        return {
+          functionResponse: {
+            id: call.request.callId,
+            name: call.request.name,
+            response: { error: call.response?.error?.message || 'Tool execution failed' }
+          }
+        };
+      }
+      return null;
+    }).filter(Boolean).flat();
+
+    console.log('发送工具结果到 Gemini:', toolResultParts.length, '个部分');
+
+    // 创建新的 Turn 来处理工具结果
+    const chat = this.clientManager.getClient()?.getChat();
+    if (chat) {
+      this.currentTurn = new Turn(chat);
+      
+      // 发送工具结果并处理 Gemini 的后续响应
+      await this.processStreamEvents(toolResultParts, res);
+    }
+  }
+
+  private resetState(): void {
+    this.pendingToolCalls.clear();
+    this.completedToolCalls = [];
+    this.waitingForToolCompletion = false;
   }
 
   private buildFullMessage(message: string, filePaths: string[]): string {

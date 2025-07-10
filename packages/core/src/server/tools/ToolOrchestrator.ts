@@ -23,6 +23,7 @@ import { StreamingEventService } from '../chat/StreamingEventService.js';
 export class ToolOrchestrator {
   private toolScheduler: CoreToolScheduler | null = null;
   private currentResponse: express.Response | null = null;
+  private toolCompletionCallback: ((completedCalls: CompletedToolCall[]) => Promise<void>) | null = null;
 
   constructor(
     private streamingEventService: StreamingEventService
@@ -40,6 +41,10 @@ export class ToolOrchestrator {
       getPreferredEditor: () => 'vscode',
       config
     });
+  }
+
+  public setToolCompletionCallback(callback: (completedCalls: CompletedToolCall[]) => Promise<void>): void {
+    this.toolCompletionCallback = callback;
   }
 
   public async scheduleToolCall(
@@ -95,13 +100,18 @@ export class ToolOrchestrator {
     this.currentResponse = null;
   }
 
-  private handleAllToolCallsComplete(completedCalls: CompletedToolCall[]): void {
+  private async handleAllToolCallsComplete(completedCalls: CompletedToolCall[]): Promise<void> {
     console.log('所有工具调用完成:', completedCalls.length);
     
     if (this.currentResponse) {
       for (const toolCall of completedCalls) {
         this.streamingEventService.sendToolResultEvent(this.currentResponse, toolCall);
       }
+    }
+
+    // 调用外部回调（如果设置了）
+    if (this.toolCompletionCallback) {
+      await this.toolCompletionCallback(completedCalls);
     }
   }
 
