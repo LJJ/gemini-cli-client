@@ -60,42 +60,15 @@ class ChatService: ObservableObject {
         do {
             // 统一使用流式响应，让 AI 自动决定是否需要交互式处理
             let stream = await apiService.sendMessageStream(text, filePaths: filePaths, workspacePath: workspacePath)
-            var responseContent = ""
-            var hasCreatedResponseMessage = false
             
             for try await chunk in stream {
-                // 尝试解析结构化事件
-              
+                // 解析结构化事件
                 if let event = parseStructuredEvent(chunk) {
                     handleStructuredEvent(event)
-                    continue
-                }
-                
-                // 如果不是结构化事件，作为普通文本内容处理
-                responseContent += chunk
-                
-                // 创建或更新响应消息
-                if !hasCreatedResponseMessage {
-                    messages.append(ChatMessage(
-                        content: responseContent,
-						type: .text
-                    ))
-                    hasCreatedResponseMessage = true
                 } else {
-                    // 更新最后一条消息
-                    if let lastIndex = messages.indices.last {
-                        messages[lastIndex] = ChatMessage(
-                            content: responseContent,
-							type: .text,
-                            timestamp: messages[lastIndex].timestamp
-                        )
-                    }
+                    // 如果不是结构化事件，记录错误
+                    print("收到非结构化响应: \(chunk)")
                 }
-            }
-            
-            // 如果流式响应为空，显示错误信息
-            if responseContent.isEmpty && !hasCreatedResponseMessage {
-                errorMessage = "未收到响应内容，请检查网络连接。"
             }
         } catch {
             errorMessage = "发送消息时发生错误: \(error.localizedDescription)"
@@ -186,13 +159,7 @@ class ChatService: ObservableObject {
             
         case .complete(let data):
             // 处理完成事件
-            if data.success {
-                let completeMessage = ChatMessage(
-                    content: "✅ 操作完成",
-					type: .thinking
-                )
-                messages.append(completeMessage)
-            }
+            print("chat complete")
         }
     }
     

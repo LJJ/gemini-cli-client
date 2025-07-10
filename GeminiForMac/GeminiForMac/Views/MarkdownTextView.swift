@@ -18,7 +18,6 @@ struct MarkdownTextView: View {
 				.markdownTextStyle(textStyle: {
 					BackgroundColor(nil)
 				})
-                .markdownTheme(.gitHub)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8)
