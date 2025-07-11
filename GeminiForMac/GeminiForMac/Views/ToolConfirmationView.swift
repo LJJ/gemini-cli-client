@@ -203,7 +203,6 @@ struct ToolConfirmationView: View {
         .background(Color(NSColor.controlBackgroundColor))
         .cornerRadius(12)
         .shadow(radius: 10)
-        .frame(maxWidth: 500)
     }
 }
 

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MarkdownUI
 
 struct MessageView: View {
     let message: ChatMessage
@@ -45,12 +46,14 @@ struct MessageView: View {
                 } else {
                     // Gemini 回复使用 Markdown 渲染
                     MarkdownTextView(text: message.content)
+                        .markdownTheme(.basic)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(Color.green.opacity(0.1))
                         )
+                        .background(Color.clear) // 添加此行，尝试设置背景为透明
                 }
                 
                 // 时间戳

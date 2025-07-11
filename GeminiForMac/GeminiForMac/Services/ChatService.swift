@@ -17,6 +17,7 @@ class ChatService: ObservableObject {
     @Published var errorMessage: String?
     @Published var pendingToolConfirmation: ToolConfirmationEvent?
     @Published var showToolConfirmation = false
+    @Published var statusMessage: String? // 新增：用于显示动态状态消息
     
     // 工具确认队列
     private var toolConfirmationQueue: [ToolConfirmationEvent] = []
@@ -28,7 +29,7 @@ class ChatService: ObservableObject {
         // 添加欢迎消息
         messages.append(ChatMessage(
             content: "你好！我是 Gemini CLI 助手。我可以帮助你编写代码、回答问题或执行各种任务。\n\n💡 提示：你可以在文件浏览器中选择文件，然后发送消息时我会自动包含文件内容进行分析。",
-            type: .thinking
+            type: .text // 修改为 .text
         ))
     }
     
@@ -52,15 +53,12 @@ class ChatService: ObservableObject {
         
         // 如果有文件路径，添加一个系统消息显示文件信息
         if !filePaths.isEmpty {
-            let fileInfoMessage = ChatMessage(
-                content: "📎 已选择 \(filePaths.count) 个文件进行分析",
-                type: .thinking
-            )
-            messages.append(fileInfoMessage)
+            statusMessage = "📎 已选择 \(filePaths.count) 个文件进行分析" // 修改为更新 statusMessage
         }
         
         isLoading = true
         errorMessage = nil
+        statusMessage = "正在处理..." // 添加此行
         
         do {
             // 统一使用流式响应，让 AI 自动决定是否需要交互式处理
@@ -80,6 +78,9 @@ class ChatService: ObservableObject {
         }
         
         isLoading = false
+        if statusMessage == "正在处理..." { // 检查是否是“正在处理...”消息
+            statusMessage = nil // 清空状态消息
+        }
     }
     
     // 解析结构化事件
@@ -103,37 +104,20 @@ class ChatService: ObservableObject {
             }
             
         case .thought(let data):
-            // 处理思考过程 - 可以选择显示或隐藏
-            // 这里我们选择显示思考过程，让用户了解 AI 的推理过程
-            let thoughtMessage = ChatMessage(
-                content: "💭 **\(data.subject)**\n\(data.description)",
-                type: .thinking
-            )
-//            messages.append(thoughtMessage)
+            // 处理思考过程 - 更新 statusMessage
+            statusMessage = "💭 **\(data.subject)**\n\(data.description)"
             
         case .toolCall(let data):
-            // 处理工具调用
-            let toolMessage = ChatMessage(
-                content: "🔧 正在调用工具: \(data.displayName)",
-                type: .thinking
-            )
-            merge(message: toolMessage)
+            // 处理工具调用 - 更新 statusMessage
+            statusMessage = "🔧 正在调用工具: \(data.displayName)"
             
         case .toolExecution(let data):
-            // 处理工具执行状态
-            let statusMessage = ChatMessage(
-                content: "⚡ \(data.message)",
-                type: .thinking
-            )
-            merge(message: statusMessage)
+            // 处理工具执行状态 - 更新 statusMessage
+            statusMessage = "⚡ \(data.message)"
             
         case .toolResult(let data):
-            // 处理工具执行结果
-            let resultMessage = ChatMessage(
-                content: data.displayResult,
-                type: .thinking
-            )
-            merge(message: resultMessage)
+            // 处理工具执行结果 - 更新 statusMessage
+            statusMessage = data.displayResult
             
         case .toolConfirmation(let data):
             // 处理工具确认请求 - 添加到队列
@@ -177,8 +161,9 @@ class ChatService: ObservableObject {
             handleErrorEvent(data)
             
         case .complete(let data):
-            // 处理完成事件
+            // 处理完成事件 - 清空 statusMessage
             print("chat complete")
+            statusMessage = nil // 清空状态消息
         }
     }
     
@@ -243,13 +228,10 @@ class ChatService: ObservableObject {
                 try? await Task.sleep(nanoseconds: 1_000_000_000) // 1秒
                 
                 // 更新消息状态
-                if let lastIndex = messages.indices.last {
-                    messages[lastIndex] = ChatMessage(
-                        content: "✅ 工具调用执行完成",
-                        type: .thinking,
-                        timestamp: messages[lastIndex].timestamp
-                    )
-                }
+                statusMessage = "✅ 工具调用执行完成"
+                // 等待一段时间，让用户看到状态，然后清空
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1秒
+                statusMessage = nil
             } else {
                 errorMessage = "确认操作失败: \(response.message)"
             }
@@ -288,7 +270,7 @@ class ChatService: ObservableObject {
         // 重新添加欢迎消息
         messages.append(ChatMessage(
             content: "你好！我是 Gemini CLI 助手。我可以帮助你编写代码、回答问题或执行各种任务。\n\n💡 提示：你可以在文件浏览器中选择文件，然后发送消息时我会自动包含文件内容进行分析。",
-            type: .thinking
+            type: .text // 修改为 .text
         ))
     }
     
@@ -330,7 +312,7 @@ class ChatService: ObservableObject {
         // 添加一个系统消息提示用户
         let authMessage = ChatMessage(
             content: "🔐 检测到认证问题，请重新进行认证设置",
-            type: .thinking
+            type: .text // 修改为 .text
         )
         messages.append(authMessage)
     }

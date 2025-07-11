@@ -43,6 +43,23 @@ struct ContentView: View {
                         }
                     }
                 }
+
+                // 状态消息
+                if let statusMessage = chatService.statusMessage {
+                    HStack {
+                        if chatService.isLoading { // 如果正在加载，显示 ProgressView
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                        Text(statusMessage)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.blue.opacity(0.1)) // 可以根据需要调整颜色
+                }
                 
                 // 错误消息
                 if let errorMessage = chatService.errorMessage {
@@ -57,20 +74,6 @@ struct ContentView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(Color.red.opacity(0.1))
-                }
-                
-                // 加载状态
-                if chatService.isLoading {
-                    HStack {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                        Text("正在处理...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
                 }
                 
                 // 输入区域

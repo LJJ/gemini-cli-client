@@ -11,7 +11,6 @@ enum ChatMessageType:Int, Codable{
 	case user
 	case text
 	case image
-	case thinking
 }
 
 // MARK: - 聊天消息模型

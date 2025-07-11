@@ -80,7 +80,6 @@ struct SideBySideDiffView: View {
                             }
                         }
                     }
-                    .frame(maxHeight: 400)
                     .background(Color(NSColor.textBackgroundColor))
                 }
                 .frame(maxWidth: .infinity)
@@ -118,7 +117,6 @@ struct SideBySideDiffView: View {
                             }
                         }
                     }
-                    .frame(maxHeight: 400)
                     .background(Color(NSColor.textBackgroundColor))
                 }
                 .frame(maxWidth: .infinity)
