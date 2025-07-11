@@ -6,9 +6,10 @@
 //
 
 import SwiftUI
+import Factory
 
 struct AuthDialogView: View {
-    @ObservedObject var authService: AuthService
+    @StateObject private var authService = Container.shared.authService.resolve()
     @State private var selectedAuthType: AuthType = .loginWithGoogle
     @State private var apiKey = ""
     @State private var googleCloudProject = ""
@@ -214,6 +215,6 @@ struct AuthTypeRow: View {
 }
 
 #Preview {
-    AuthDialogView(authService: AuthService())
+    AuthDialogView()
         .padding()
 } 

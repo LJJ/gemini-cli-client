@@ -9,6 +9,7 @@ import { createToolRegistry } from '../../config/config.js';
 import { AuthService } from '../auth/AuthService.js';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../../config/models.js';
 import * as path from 'path';
+import { ErrorCode, createError } from '../types/error-codes.js';
 
 /**
  * 客户端管理器 - 负责 Gemini 客户端的初始化和管理
@@ -156,7 +157,7 @@ export class ClientManager {
 
       // 检查认证状态
       if (!this.authService.isUserAuthenticated()) {
-        throw new Error('用户未认证，请先完成认证设置');
+        throw createError(ErrorCode.AUTH_REQUIRED);
       }
 
       // 创建 Gemini 客户端并初始化
@@ -191,7 +192,7 @@ export class ClientManager {
         console.log('普通 Gemini API 初始化成功');
       } catch (fallbackError) {
         console.error('普通 Gemini API 也初始化失败:', fallbackError);
-        throw new Error(`Gemini 客户端初始化失败: ${fallbackError instanceof Error ? fallbackError.message : '未知错误'}`);
+        throw createError(ErrorCode.CLIENT_INIT_FAILED);
       }
     }
   }

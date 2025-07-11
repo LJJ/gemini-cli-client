@@ -7,6 +7,9 @@
 
 import Foundation
 
+// 导入错误代码定义
+// 注意：ErrorCode 定义在 ErrorCode.swift 文件中
+
 // MARK: - 标准化流式事件定义
 // 与后端 API 规范完全一致
 
@@ -193,8 +196,36 @@ struct CompleteEventData: Codable {
 // 8. 错误事件数据
 struct ErrorEventData: Codable {
     let message: String
-    let code: String?
+    let code: ErrorCode?
     let details: String?
+    
+    /// 获取用户友好的错误消息
+    var userFriendlyMessage: String {
+        if let errorCode = code {
+            return errorCode.userFriendlyMessage
+        }
+        return message
+    }
+    
+    /// 是否需要用户重新认证
+    var requiresReauthentication: Bool {
+        return code?.requiresReauthentication ?? false
+    }
+    
+    /// 是否需要用户检查网络连接
+    var requiresNetworkCheck: Bool {
+        return code?.requiresNetworkCheck ?? false
+    }
+    
+    /// 是否需要用户重试操作
+    var requiresRetry: Bool {
+        return code?.requiresRetry ?? false
+    }
+    
+    /// 是否需要用户检查输入参数
+    var requiresInputValidation: Bool {
+        return code?.requiresInputValidation ?? false
+    }
 }
 
 // MARK: - 事件解析工具

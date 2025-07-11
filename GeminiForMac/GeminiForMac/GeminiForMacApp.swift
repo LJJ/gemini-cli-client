@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Factory
 
 @main
 struct GeminiForMacApp: App {
@@ -21,14 +22,16 @@ struct GeminiForMacApp: App {
                 Divider()
                 
                 Button("切换认证方式") {
-                    // 通过通知中心发送通知
-                    NotificationCenter.default.post(name: NSNotification.Name("switchAuthMethod"), object: nil)
+                    // 使用依赖注入获取 AuthService 并清除认证配置
+                    let authService = Container.shared.authService.resolve()
+                    authService.clearAuthConfig()
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
                 
                 Button("登出") {
-                    // 通过通知中心发送通知
-                    NotificationCenter.default.post(name: NSNotification.Name("logout"), object: nil)
+                    // 使用依赖注入获取 AuthService 并登出
+                    let authService = Container.shared.authService.resolve()
+                    authService.logout()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             }

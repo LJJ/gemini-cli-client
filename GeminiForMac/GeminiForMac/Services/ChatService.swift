@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Factory
 
 @MainActor
 class ChatService: ObservableObject {
@@ -172,8 +173,8 @@ class ChatService: ObservableObject {
             addToolConfirmationToQueue(confirmationEvent)
             
         case .error(let data):
-            // 处理错误
-            self.errorMessage = data.message
+            // 处理错误 - 使用新的错误代码系统
+            handleErrorEvent(data)
             
         case .complete(let data):
             // 处理完成事件
@@ -289,5 +290,69 @@ class ChatService: ObservableObject {
             content: "你好！我是 Gemini CLI 助手。我可以帮助你编写代码、回答问题或执行各种任务。\n\n💡 提示：你可以在文件浏览器中选择文件，然后发送消息时我会自动包含文件内容进行分析。",
             type: .thinking
         ))
+    }
+    
+    // MARK: - 错误处理
+    
+    /// 处理错误事件 - 使用新的错误代码系统
+    private func handleErrorEvent(_ errorData: ErrorEventData) {
+        // 记录错误日志
+        print("收到错误事件: \(errorData.code) - \(errorData.message)")
+        
+        // 根据错误代码设置用户友好的错误消息
+        let userMessage = errorData.userFriendlyMessage
+        self.errorMessage = userMessage
+        
+        // 根据错误类型执行相应的处理逻辑
+        if errorData.requiresReauthentication {
+            // 触发重新认证流程
+            handleReauthenticationError()
+        } else if errorData.requiresNetworkCheck {
+            // 提示用户检查网络
+            handleNetworkError()
+        } else if errorData.requiresRetry {
+            // 提示用户重试
+            handleRetryableError()
+        } else if errorData.requiresInputValidation {
+            // 提示用户检查输入
+            handleValidationError()
+        }
+    }
+    
+    /// 处理需要重新认证的错误
+    private func handleReauthenticationError() {
+        print("需要重新认证")
+        
+        // 使用依赖注入获取 AuthService 并打开认证对话框
+        let authService = Container.shared.authService.resolve()
+        authService.openAuthDialog()
+        
+        // 添加一个系统消息提示用户
+        let authMessage = ChatMessage(
+            content: "🔐 检测到认证问题，请重新进行认证设置",
+            type: .thinking
+        )
+        messages.append(authMessage)
+    }
+    
+    /// 处理网络相关错误
+    private func handleNetworkError() {
+        // TODO: 实现网络错误处理
+        print("网络连接问题")
+        // 可以在这里显示网络状态或提供重连选项
+    }
+    
+    /// 处理可重试的错误
+    private func handleRetryableError() {
+        // TODO: 实现重试逻辑
+        print("可以重试的错误")
+        // 可以在这里提供重试按钮或自动重试
+    }
+    
+    /// 处理输入验证错误
+    private func handleValidationError() {
+        // TODO: 实现输入验证错误处理
+        print("输入参数问题")
+        // 可以在这里提示用户检查输入
     }
 }

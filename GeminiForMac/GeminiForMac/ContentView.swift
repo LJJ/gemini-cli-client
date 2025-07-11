@@ -6,13 +6,14 @@
 //
 
 import SwiftUI
+import Factory
 
 struct ContentView: View {
     @StateObject private var chatService = ChatService()
     @StateObject private var fileExplorerService = FileExplorerService()
-    @StateObject private var authService = AuthService()
     @State private var messageText = ""
     @FocusState private var isTextFieldFocused: Bool
+    @StateObject private var authService = Container.shared.authService.resolve()
     
     var body: some View {
         HSplitView {
@@ -103,15 +104,10 @@ struct ContentView: View {
                 await chatService.checkConnection()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("switchAuthMethod"))) { _ in
-            authService.clearAuthConfig()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("logout"))) { _ in
-            authService.clearAuthConfig()
-        }
+
         // 认证对话框
         .sheet(isPresented: $authService.showAuthDialog) {
-            AuthDialogView(authService: authService)
+            AuthDialogView()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }

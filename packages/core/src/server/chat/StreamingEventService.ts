@@ -108,7 +108,7 @@ export class StreamingEventService {
     this.writeEvent(res, event);
   }
 
-  public sendErrorEvent(res: express.Response, message: string, code?: string, details?: string): void {
+  public sendErrorEvent(res: express.Response, message: string, code: string, details?: string): void {
     const event = StreamingEventFactory.createErrorEvent(message, code, details);
     this.writeEvent(res, event);
   }

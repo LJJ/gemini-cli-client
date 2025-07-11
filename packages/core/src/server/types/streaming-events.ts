@@ -91,7 +91,7 @@ export interface CompleteEventData {
 // 8. 错误事件数据
 export interface ErrorEventData {
   message: string;
-  code?: string;
+  code: string;
   details?: string;
 }
 
@@ -179,7 +179,7 @@ export class StreamingEventFactory {
     };
   }
 
-  static createErrorEvent(message: string, code?: string, details?: string): StreamingEvent {
+  static createErrorEvent(message: string, code: string, details?: string): StreamingEvent {
     return {
       type: 'error',
       data: { message, code, details },

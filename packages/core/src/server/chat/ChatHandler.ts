@@ -11,6 +11,7 @@ import { StreamingEventService } from './StreamingEventService.js';
 import { ToolOrchestrator } from '../tools/ToolOrchestrator.js';
 import { ClientManager } from '../core/ClientManager.js';
 import { CompletedToolCall } from '../../core/coreToolScheduler.js';
+import { ErrorCode, createError } from '../types/error-codes.js';
 
 /**
  * 聊天处理器 - 负责聊天消息的处理和流式响应
@@ -54,7 +55,7 @@ export class ChatHandler {
       const config = this.clientManager.getConfig();
       
       if (!geminiClient || !config) {
-        throw new Error('Gemini client not initialized');
+        throw createError(ErrorCode.CLIENT_NOT_INITIALIZED);
       }
 
       // 初始化工具协调器
@@ -78,10 +79,12 @@ export class ChatHandler {
       
     } catch (error) {
       console.error('Error in handleStreamingChat:', error);
+      const errorCode = error instanceof Error && (error as any).code ? (error as any).code : ErrorCode.STREAM_ERROR;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.streamingEventService.sendErrorEvent(
         res, 
-        error instanceof Error ? error.message : 'Unknown error',
-        'STREAM_ERROR',
+        errorMessage,
+        errorCode,
         error instanceof Error ? error.stack : undefined
       );
       res.end();
@@ -122,7 +125,7 @@ export class ChatHandler {
 
   private async processStreamEvents(messageParts: any[], res: express.Response): Promise<void> {
     if (!this.currentTurn || !this.abortController) {
-      throw new Error('Turn or AbortController not initialized');
+      throw createError(ErrorCode.TURN_NOT_INITIALIZED);
     }
     
     // 收集所有工具调用请求，而不是立即处理
@@ -158,13 +161,13 @@ export class ChatHandler {
           this.streamingEventService.sendErrorEvent(
             res,
             event.value.error.message,
-            'GEMINI_ERROR',
+            ErrorCode.GEMINI_ERROR,
             event.value.error.status?.toString()
           );
           break;
           
         case GeminiEventType.UserCancelled:
-          this.streamingEventService.sendErrorEvent(res, '操作被取消');
+          this.streamingEventService.sendErrorEvent(res, '操作被取消', ErrorCode.INTERNAL_ERROR);
           break;
           
         case GeminiEventType.ChatCompressed:
@@ -182,7 +185,7 @@ export class ChatHandler {
 
   private async handleBatchToolCallRequests(requests: ToolCallRequestInfo[], res: express.Response): Promise<void> {
     if (!this.abortController) {
-      throw new Error('AbortController not initialized');
+      throw createError(ErrorCode.ABORT_CONTROLLER_NOT_INITIALIZED);
     }
 
     console.log('批量处理工具调用请求:', requests.length);
@@ -232,7 +235,7 @@ export class ChatHandler {
 
   private async processToolResults(res: express.Response): Promise<void> {
     if (!this.currentTurn || !this.abortController) {
-      throw new Error('Turn or AbortController not initialized');
+      throw createError(ErrorCode.TURN_NOT_INITIALIZED);
     }
 
     // 构建工具结果作为新的消息部分

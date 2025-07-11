@@ -13,6 +13,7 @@ import { ChatHandler } from '../chat/ChatHandler.js';
 import { AuthService } from '../auth/AuthService.js';
 import { ToolConfirmationRequest } from '../types/api-types.js';
 import { ToolConfirmationOutcome } from '../../tools/tools.js';
+import { ErrorCode, ERROR_DESCRIPTIONS } from '../types/error-codes.js';
 
 /**
  * Gemini 服务 - 主要协调器
@@ -47,7 +48,13 @@ export class GeminiService {
       const { message, filePaths = [], workspacePath } = req.body;
       
       if (!message) {
-        return res.status(400).json(ResponseFactory.validationError('message', 'Message is required'));
+        // 设置流式响应头
+        this.streamingEventService.setupStreamingResponse(res);
+        // 发送错误事件而不是标准HTTP响应
+        this.streamingEventService.sendErrorEvent(res, 'Message is required', ErrorCode.VALIDATION_ERROR);
+        this.streamingEventService.sendCompleteEvent(res, false, '请求验证失败');
+        res.end();
+        return;
       }
 
       console.log('Processing chat request', { 
@@ -64,7 +71,20 @@ export class GeminiService {
       await this.chatHandler.handleStreamingChat(message, filePaths, res);
       
     } catch (error) {
-      res.status(500).json(ResponseFactory.internalError(error instanceof Error ? error.message : 'Unknown error'));
+      // 设置流式响应头
+      this.streamingEventService.setupStreamingResponse(res);
+      // 发送错误事件而不是标准HTTP响应
+      const errorCode = error instanceof Error && (error as any).code ? (error as any).code : ErrorCode.INTERNAL_ERROR;
+      const errorMessage = error instanceof Error && (error as any).code && Object.values(ErrorCode).includes(errorCode) 
+        ? ERROR_DESCRIPTIONS[errorCode as ErrorCode] 
+        : (error instanceof Error ? error.message : 'Unknown error');
+      this.streamingEventService.sendErrorEvent(
+        res, 
+        errorMessage,
+        errorCode
+      );
+      this.streamingEventService.sendCompleteEvent(res, false, '处理请求时发生错误');
+      res.end();
     }
   }
 
