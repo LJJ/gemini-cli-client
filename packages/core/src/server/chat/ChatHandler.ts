@@ -12,9 +12,10 @@ import { ToolOrchestrator } from '../tools/ToolOrchestrator.js';
 import { ClientManager } from '../core/ClientManager.js';
 import { CompletedToolCall } from '../../core/coreToolScheduler.js';
 import { ErrorCode, createError } from '../types/error-codes.js';
+import { configFactory } from '../../config/ConfigFactory.js';
 
 /**
- * 聊天处理器 - 负责聊天消息的处理和流式响应
+ * 聊天处理器 - 负责聊天消息的处理和流式响应（优化版）
  * 
  * 职责：
  * - 聊天消息处理
@@ -22,6 +23,10 @@ import { ErrorCode, createError } from '../types/error-codes.js';
  * - 事件分发
  * - Turn 生命周期管理
  * - 工具调用结果处理
+ * 
+ * 优化后的特性：
+ * - 使用ConfigFactory获取client和config
+ * - 适应新的工作区管理模式
  */
 export class ChatHandler {
   private currentTurn: Turn | null = null;
@@ -50,9 +55,10 @@ export class ChatHandler {
       // 构建完整消息
       const fullMessage = this.buildFullMessage(message, filePaths);
       
-      // 获取客户端和配置
-      const geminiClient = this.clientManager.getClient();
-      const config = this.clientManager.getConfig();
+      // 获取客户端和配置 - 使用新的ConfigFactory接口
+      const container = configFactory.getCurrentWorkspaceContainer();
+      const geminiClient = container.geminiClient;
+      const config = container.config;
       
       if (!geminiClient || !config) {
         throw createError(ErrorCode.CLIENT_NOT_INITIALIZED);
@@ -265,7 +271,8 @@ export class ChatHandler {
     console.log('发送工具结果到 Gemini:', parts.length, '个部分');
 
     // 直接将工具结果添加到聊天历史，而不是创建新的 Turn
-    const chat = this.clientManager.getClient()?.getChat();
+    const container = configFactory.getCurrentWorkspaceContainer();
+    const chat = container.geminiClient?.getChat();
     if (chat) {
       // 将工具结果添加到聊天历史
       chat.addHistory({

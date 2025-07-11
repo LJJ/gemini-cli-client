@@ -11,8 +11,9 @@ import { AuthConfigManager } from './AuthConfigManager.js';
 import { OAuthManager } from './OAuthManager.js';
 import { AuthValidator } from './AuthValidator.js';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../../config/models.js';
-import { Config } from '../../config/config.js';
+import { Config, ConfigParameters } from '../../config/config.js';
 import { ErrorCode, createError } from '../types/error-codes.js';
+import { ConfigurableService, ServiceStatus, ServiceStatusInfo } from '../types/service-interfaces.js';
 
 /**
  * 认证服务 - 主要协调器
@@ -22,8 +23,14 @@ import { ErrorCode, createError } from '../types/error-codes.js';
  * - HTTP请求处理
  * - 认证状态管理
  * - 组件协调
+ * 
+ * 重构后的特性：
+ * - 支持运行时重新配置
+ * - 实现ConfigurableService接口
+ * - 解耦Config依赖
+ * - 启动时自动验证OAuth凭据
  */
-export class AuthService {
+export class AuthService implements ConfigurableService {
   private currentAuthType: AuthType | null = null;
   private currentApiKey: string | null = null;
   private currentGoogleCloudProject: string | null = null;
@@ -33,37 +40,104 @@ export class AuthService {
   private configManager: AuthConfigManager;
   private oauthManager: OAuthManager;
   private validator: AuthValidator;
+  private config: Config | null = null;
+  private status: ServiceStatusInfo;
 
   constructor(config?: Config) {
+    // 初始化状态
+    this.status = {
+      status: ServiceStatus.UNINITIALIZED,
+      message: 'AuthService创建完成，等待配置',
+      timestamp: new Date()
+    };
+
     // 依赖注入 - 组合专职组件
     this.configManager = new AuthConfigManager();
-    this.oauthManager = new OAuthManager(config);
+    this.oauthManager = new OAuthManager();
     this.validator = new AuthValidator();
 
-    // 立即尝试恢复认证状态（修复重启问题）
+    // 如果提供了config，立即设置
+    if (config) {
+      this.setConfig(config);
+    }
+
+    // 立即尝试恢复认证状态（但不依赖config）
     this.initializeAuthState();
   }
 
   /**
-   * 设置配置对象
+   * 实现ConfigurableService接口 - 设置配置对象
    */
   public setConfig(config: Config): void {
+    console.log('AuthService: 设置配置对象');
+    this.config = config;
+    
+    // 更新依赖组件的配置
     this.oauthManager.setConfig(config);
+    
+    // 更新状态
+    this.updateStatus(ServiceStatus.CONFIGURED, 'Config对象已设置');
   }
 
   /**
-   * 获取配置对象
+   * 实现ConfigurableService接口 - 获取配置对象
    */
   public getConfig(): Config | null {
-    return this.oauthManager.hasConfig() ? this.oauthManager.getConfig() : null;
+    return this.config;
   }
 
   /**
-   * 初始化认证状态 - 在构造函数中立即调用
+   * 实现ConfigurableService接口 - 检查服务是否已配置
+   */
+  public isConfigured(): boolean {
+    return this.config !== null;
+  }
+
+  /**
+   * 运行时重新配置服务
+   * @param config 新的配置对象
+   */
+  public async reconfigure(config: Config): Promise<void> {
+    console.log('AuthService: 重新配置服务');
+    this.updateStatus(ServiceStatus.CONFIGURING, '正在重新配置服务');
+    
+    try {
+      // 设置新的配置
+      this.setConfig(config);
+      
+      // 重新初始化认证状态
+      await this.initializeAuthState();
+      
+      console.log('AuthService: 重新配置完成');
+      this.updateStatus(ServiceStatus.CONFIGURED, '重新配置完成');
+    } catch (error) {
+      console.error('AuthService: 重新配置失败:', error);
+      this.updateStatus(ServiceStatus.ERROR, '重新配置失败', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取服务状态
+   */
+  public getStatus(): ServiceStatusInfo {
+    return { ...this.status };
+  }
+
+  /**
+   * 检查用户是否已认证
+   */
+  public isUserAuthenticated(): boolean {
+    return this.isAuthenticated;
+  }
+
+  /**
+   * 初始化认证状态 - 在构造函数中调用（优化OAuth验证）
    */
   private async initializeAuthState(): Promise<void> {
     try {
       console.log('正在恢复认证状态...');
+      this.updateStatus(ServiceStatus.INITIALIZING, '正在恢复认证状态');
       
       // 1. 首先尝试从配置文件恢复
       const savedConfig = await this.configManager.loadConfig();
@@ -78,14 +152,24 @@ export class AuthService {
         // 验证恢复的认证状态
         if (savedConfig.authType === AuthType.LOGIN_WITH_GOOGLE) {
           // OAuth需要验证凭据
-          console.log('开始验证OAuth凭据有效性...');
-          this.isAuthenticated = await this.oauthManager.validateCredentials();
-          console.log('OAuth凭据验证结果:', this.isAuthenticated ? '成功' : '失败');
-          
-          if (!this.isAuthenticated) {
-            console.log('⚠️ OAuth凭据验证失败，用户需要重新登录');
+          if (this.config) {
+            console.log('开始验证OAuth凭据有效性...');
+            this.isAuthenticated = await this.oauthManager.validateCredentials();
+            console.log('OAuth凭据验证结果:', this.isAuthenticated ? '成功' : '失败');
           } else {
-            console.log('✅ OAuth凭据有效，认证状态已恢复');
+            // 关键修复：没有Config对象时，创建临时Config进行OAuth验证
+            console.log('没有Config对象，创建临时Config验证OAuth凭据...');
+            const tempConfig = this.createTemporaryConfig();
+            this.oauthManager.setConfig(tempConfig);
+            
+            this.isAuthenticated = await this.oauthManager.validateCredentials();
+            console.log('OAuth凭据验证结果:', this.isAuthenticated ? '成功' : '失败');
+            
+            if (!this.isAuthenticated) {
+              console.log('⚠️ OAuth凭据验证失败，用户需要重新登录');
+            } else {
+              console.log('✅ OAuth凭据有效，认证状态已恢复');
+            }
           }
         } else {
           // API Key认证直接标记为已认证
@@ -104,10 +188,31 @@ export class AuthService {
         hasApiKey: !!this.currentApiKey,
         hasGoogleCloudConfig: !!(this.currentGoogleCloudProject && this.currentGoogleCloudLocation)
       });
+
+      this.updateStatus(ServiceStatus.INITIALIZED, '认证状态初始化完成');
     } catch (error) {
       console.error('初始化认证状态失败:', error);
+      this.updateStatus(ServiceStatus.ERROR, '初始化认证状态失败', error as Error);
       // 初始化失败不应该阻止服务启动
     }
+  }
+
+  /**
+   * 创建临时Config对象用于OAuth验证
+   */
+  private createTemporaryConfig(): Config {
+    console.log('AuthService: 创建临时Config对象进行OAuth验证');
+    
+    const tempConfigParams: ConfigParameters = {
+      sessionId: `temp-auth-${Date.now()}`,
+      targetDir: process.cwd(), // 使用当前工作目录作为临时目录
+      debugMode: false,
+      cwd: process.cwd(),
+      model: DEFAULT_GEMINI_FLASH_MODEL,
+      // 不需要初始化工具注册表，因为只用于OAuth验证
+    };
+
+    return new Config(tempConfigParams);
   }
 
   public async handleAuthConfig(req: express.Request, res: express.Response) {
@@ -162,6 +267,13 @@ export class AuthService {
           success: false, 
           message: '当前认证类型不是 Google 登录' 
         });
+      }
+
+      // 检查是否有Config对象，如果没有则创建临时Config
+      if (!this.config) {
+        console.log('没有Config对象，创建临时Config进行Google登录');
+        const tempConfig = this.createTemporaryConfig();
+        this.oauthManager.setConfig(tempConfig);
       }
 
       try {
@@ -276,14 +388,6 @@ export class AuthService {
     return config;
   }
 
-  public isUserAuthenticated(): boolean {
-    return this.isAuthenticated;
-  }
-
-  public getCurrentAuthType(): AuthType | null {
-    return this.currentAuthType;
-  }
-
   /**
    * 从环境变量加载认证配置
    */
@@ -308,5 +412,17 @@ export class AuthService {
     this.currentGoogleCloudProject = null;
     this.currentGoogleCloudLocation = null;
     this.isAuthenticated = false;
+  }
+
+  /**
+   * 更新服务状态
+   */
+  private updateStatus(status: ServiceStatus, message?: string, error?: Error): void {
+    this.status = {
+      status,
+      message,
+      error,
+      timestamp: new Date()
+    };
   }
 } 

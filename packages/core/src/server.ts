@@ -9,23 +9,42 @@ import { GeminiService } from './server/core/GeminiService.js';
 import { FileService } from './server/files/FileService.js';
 import { CommandService } from './server/tools/CommandService.js';
 import { AuthService } from './server/auth/AuthService.js';
+import { configFactory } from './config/ConfigFactory.js';
 
+/**
+ * API服务器 - 重构后使用ConfigFactory管理依赖（优化版）
+ * 
+ * 重构后的特性：
+ * - 使用ConfigFactory解决模块耦合问题
+ * - AuthService作为全局单例管理
+ * - 支持运行时重新配置workspace
+ * - 保持用户认证状态
+ */
 export class APIServer {
   private serverConfig: ServerConfig;
   private geminiService: GeminiService;
   private fileService: FileService;
   private commandService: CommandService;
-  private authService: AuthService;
 
   constructor(port: number = 8080) {
+    console.log('APIServer: 初始化服务器');
+    
     this.serverConfig = new ServerConfig(port);
-    this.authService = new AuthService();
-    this.geminiService = new GeminiService(this.authService);
     this.fileService = new FileService();
     this.commandService = new CommandService();
     
+    // GeminiService不需要直接传入AuthService，它会从ConfigFactory获取
+    this.geminiService = new GeminiService();
+    
     this.setupRoutes();
     this.serverConfig.addErrorHandler();
+  }
+
+  /**
+   * 获取全局AuthService实例
+   */
+  private getAuthService(): AuthService {
+    return configFactory.getAuthService();
   }
 
   private setupRoutes() {
@@ -33,36 +52,90 @@ export class APIServer {
 
     // 健康检查
     app.get('/status', (req, res) => {
+      const authService = this.getAuthService();
       res.json({ 
         status: 'ok', 
         timestamp: new Date().toISOString(),
-        version: '0.1.9'
+        version: '0.1.9',
+        configFactory: configFactory.isFactoryInitialized() ? 'initialized' : 'uninitialized',
+        authService: {
+          configured: authService.isConfigured(),
+          authenticated: authService.isUserAuthenticated()
+        }
       });
     });
 
-    // 认证功能
-    app.post('/auth/config', (req, res) => {
-      this.authService.handleAuthConfig(req, res);
+    // 认证功能 - 直接使用全局AuthService
+    app.post('/auth/config', async (req, res) => {
+      try {
+        const authService = this.getAuthService();
+        await authService.handleAuthConfig(req, res);
+      } catch (error) {
+        console.error('Error in /auth/config:', error);
+        res.status(500).json({
+          success: false,
+          message: '认证配置失败',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     });
     
-    app.post('/auth/google-login', (req, res) => {
-      this.authService.handleGoogleLogin(req, res);
+    app.post('/auth/google-login', async (req, res) => {
+      try {
+        const authService = this.getAuthService();
+        await authService.handleGoogleLogin(req, res);
+      } catch (error) {
+        console.error('Error in /auth/google-login:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Google登录失败',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     });
     
-    app.get('/auth/status', (req, res) => {
-      this.authService.handleAuthStatus(req, res);
+    app.get('/auth/status', async (req, res) => {
+      try {
+        const authService = this.getAuthService();
+        await authService.handleAuthStatus(req, res);
+      } catch (error) {
+        console.error('Error in /auth/status:', error);
+        res.status(500).json({
+          success: false,
+          message: '查询认证状态失败',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     });
     
-    app.post('/auth/logout', (req, res) => {
-      this.authService.handleLogout(req, res);
+    app.post('/auth/logout', async (req, res) => {
+      try {
+        const authService = this.getAuthService();
+        await authService.handleLogout(req, res);
+      } catch (error) {
+        console.error('Error in /auth/logout:', error);
+        res.status(500).json({
+          success: false,
+          message: '登出失败',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     });
     
-    app.post('/auth/clear', (req, res) => {
-      this.authService.handleClearAuth(req, res);
+    app.post('/auth/clear', async (req, res) => {
+      try {
+        const authService = this.getAuthService();
+        await authService.handleClearAuth(req, res);
+      } catch (error) {
+        console.error('Error in /auth/clear:', error);
+        res.status(500).json({
+          success: false,
+          message: '清除认证配置失败',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     });
-    
 
-    
     // 聊天功能 - 连接到真实的 Gemini 服务
     app.post('/chat', (req, res) => {
       this.geminiService.handleChat(req, res);
@@ -101,11 +174,25 @@ export class APIServer {
       console.log(`💬 Chat endpoint: http://localhost:${port}/chat`);
       console.log(`📂 File operations: http://localhost:${port}/list-directory`);
       console.log(`⚡ Command execution: http://localhost:${port}/execute-command`);
+      console.log(`🏭 ConfigFactory: ${configFactory.isFactoryInitialized() ? 'initialized' : 'uninitialized'}`);
+      
+      // 初始化全局AuthService，但不设置Config（等待第一次请求）
+      const authService = this.getAuthService();
+      console.log(`🔐 AuthService: ${authService.isConfigured() ? 'configured' : 'not configured'}`);
     });
   }
 
-  public stop() {
+  public async stop() {
     console.log('🛑 Stopping Gemini CLI API Server...');
+    
+    // 清理ConfigFactory（包括AuthService）
+    try {
+      await configFactory.cleanup();
+      console.log('✅ ConfigFactory cleanup completed');
+    } catch (error) {
+      console.error('❌ Error during ConfigFactory cleanup:', error);
+    }
+    
     process.exit(0);
   }
 }
