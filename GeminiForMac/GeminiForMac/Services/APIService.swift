@@ -191,17 +191,31 @@ final class APIService:Sendable {
     
     // 启动 Google 登录
     func startGoogleLogin() async -> AuthResponse? {
-        guard let url = URL(string: "\(baseURL)/auth/google-login") else { return nil }
+        print("发送 Google 登录请求...")
+        
+        guard let url = URL(string: "\(baseURL)/auth/google-login") else { 
+            print("无法创建 Google 登录 URL")
+            return nil 
+        }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            return try decoder.decode(AuthResponse.self, from: data)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                print("Google 登录 HTTP 状态码: \(httpResponse.statusCode)")
+            }
+            
+            print("Google 登录响应数据: \(String(data: data, encoding: .utf8) ?? "无法解码")")
+            
+            let authResponse = try decoder.decode(AuthResponse.self, from: data)
+            print("Google 登录响应解析成功: \(authResponse)")
+            return authResponse
         } catch {
-            print("解析Google登录响应失败: \(error)")
+            print("Google 登录请求失败: \(error)")
             return nil
         }
     }

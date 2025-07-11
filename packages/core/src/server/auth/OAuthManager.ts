@@ -36,6 +36,20 @@ export class OAuthManager {
   }
 
   /**
+   * 检查是否有配置对象
+   */
+  public hasConfig(): boolean {
+    return this.config !== null;
+  }
+
+  /**
+   * 获取配置对象
+   */
+  public getConfig(): Config | null {
+    return this.config;
+  }
+
+  /**
    * 验证OAuth凭据是否有效
    * 
    * 让OAuth2Client自动处理令牌刷新，我们只需要检查基本的文件完整性

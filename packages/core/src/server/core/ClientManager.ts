@@ -149,8 +149,13 @@ export class ClientManager {
         proxy: this.getProxyConfig(),
       });
 
-      // 设置 AuthService 的配置对象
-      this.authService.setConfig(this.config);
+      // 如果AuthService还没有Config对象，重新创建一个
+      if (!this.authService.getConfig()) {
+        this.authService = new AuthService(this.config);
+      } else {
+        // 设置 AuthService 的配置对象
+        this.authService.setConfig(this.config);
+      }
 
       // 初始化工具注册表
       (this.config as any).toolRegistry = await createToolRegistry(this.config);

@@ -11,6 +11,6 @@ import Factory
 extension Container {
     @MainActor
     var authService:Factory<AuthService> {
-        self {@MainActor in AuthService()}
+        self {@MainActor in AuthService()}.shared
     }
 }

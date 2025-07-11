@@ -34,10 +34,10 @@ export class AuthService {
   private oauthManager: OAuthManager;
   private validator: AuthValidator;
 
-  constructor() {
+  constructor(config?: Config) {
     // 依赖注入 - 组合专职组件
     this.configManager = new AuthConfigManager();
-    this.oauthManager = new OAuthManager();
+    this.oauthManager = new OAuthManager(config);
     this.validator = new AuthValidator();
 
     // 立即尝试恢复认证状态（修复重启问题）
@@ -49,6 +49,13 @@ export class AuthService {
    */
   public setConfig(config: Config): void {
     this.oauthManager.setConfig(config);
+  }
+
+  /**
+   * 获取配置对象
+   */
+  public getConfig(): Config | null {
+    return this.oauthManager.hasConfig() ? this.oauthManager.getConfig() : null;
   }
 
   /**
