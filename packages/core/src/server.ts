@@ -135,7 +135,7 @@ export class APIServer {
         });
       }
     });
-
+    
     // 聊天功能 - 连接到真实的 Gemini 服务
     app.post('/chat', (req, res) => {
       this.geminiService.handleChat(req, res);

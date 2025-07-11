@@ -131,9 +131,9 @@ export class GeminiService {
       // 委托给工具协调器处理
       const abortController = new AbortController();
       await this.toolOrchestrator.handleToolConfirmation(callId, outcome as ToolConfirmationOutcome, abortController.signal);
-
+      
       res.json(ResponseFactory.toolConfirmation('Tool confirmation processed successfully'));
-
+      
     } catch (error) {
       console.error('Error in handleToolConfirmation:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -153,7 +153,7 @@ export class GeminiService {
       authService: {
         configured: authService.isConfigured(),
         authenticated: authService.isUserAuthenticated()
-      }
+    }
     };
   }
 

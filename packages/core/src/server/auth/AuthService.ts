@@ -153,9 +153,9 @@ export class AuthService implements ConfigurableService {
         if (savedConfig.authType === AuthType.LOGIN_WITH_GOOGLE) {
           // OAuth需要验证凭据
           if (this.config) {
-            console.log('开始验证OAuth凭据有效性...');
-            this.isAuthenticated = await this.oauthManager.validateCredentials();
-            console.log('OAuth凭据验证结果:', this.isAuthenticated ? '成功' : '失败');
+          console.log('开始验证OAuth凭据有效性...');
+          this.isAuthenticated = await this.oauthManager.validateCredentials();
+          console.log('OAuth凭据验证结果:', this.isAuthenticated ? '成功' : '失败');
           } else {
             // 关键修复：没有Config对象时，创建临时Config进行OAuth验证
             console.log('没有Config对象，创建临时Config验证OAuth凭据...');
@@ -164,11 +164,11 @@ export class AuthService implements ConfigurableService {
             
             this.isAuthenticated = await this.oauthManager.validateCredentials();
             console.log('OAuth凭据验证结果:', this.isAuthenticated ? '成功' : '失败');
-            
-            if (!this.isAuthenticated) {
-              console.log('⚠️ OAuth凭据验证失败，用户需要重新登录');
-            } else {
-              console.log('✅ OAuth凭据有效，认证状态已恢复');
+          
+          if (!this.isAuthenticated) {
+            console.log('⚠️ OAuth凭据验证失败，用户需要重新登录');
+          } else {
+            console.log('✅ OAuth凭据有效，认证状态已恢复');
             }
           }
         } else {

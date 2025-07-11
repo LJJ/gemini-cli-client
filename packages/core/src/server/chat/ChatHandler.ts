@@ -49,6 +49,9 @@ export class ChatHandler {
     try {
       console.log('=== 开始流式聊天处理 ===');
       
+      // 立即重置状态，确保每次请求都是干净的开始
+      this.resetState();
+      
       // 设置流式响应
       this.streamingEventService.setupStreamingResponse(res);
 
@@ -111,20 +114,19 @@ export class ChatHandler {
   }
 
   private async processToolCallResults(res: express.Response): Promise<void> {
-    // 持续检查是否有待处理的工具调用或已完成的工具调用
-    while (this.waitingForToolCompletion || this.completedToolCalls.length > 0) {
-      // 如果还在等待工具完成，等待一下
-      if (this.waitingForToolCompletion && this.completedToolCalls.length === 0) {
-        console.log('等待工具调用完成...');
+    // 当仍有待完成的工具调用或待发送的工具结果时持续循环
+    while (this.pendingToolCalls.size > 0 || this.completedToolCalls.length > 0) {
+      // 如果仍有未完成的工具调用，等待其全部完成
+      if (this.pendingToolCalls.size > 0) {
+        console.log('等待所有工具调用完成...');
         await this.waitForToolCompletion();
+        continue; // 等待结束后重新检查条件
       }
-      
-      // 处理已完成的工具调用
+
+      // 所有工具调用已完成，批量发送结果
       if (this.completedToolCalls.length > 0) {
-        console.log('工具调用完成，发送结果回 Gemini...');
+        console.log('全部工具调用完成，批量发送结果回 Gemini...');
         await this.processToolResults(res);
-        this.completedToolCalls = [];
-        // 处理完工具结果后，可能会有新的工具调用，继续循环检查
       }
     }
   }
@@ -164,6 +166,8 @@ export class ChatHandler {
           break;
           
         case GeminiEventType.Error:
+          // 改进错误日志 - 直接显示完整错误信息
+          console.error('❌ Gemini API 错误详情:', JSON.stringify(event.value, null, 2));
           this.streamingEventService.sendErrorEvent(
             res,
             event.value.error.message,
@@ -215,15 +219,24 @@ export class ChatHandler {
 
   private async handleToolCallsComplete(completedCalls: CompletedToolCall[]): Promise<void> {
     console.log('ChatHandler: 收到工具调用完成通知', completedCalls.length);
+    console.log('当前已完成工具调用数量:', this.completedToolCalls.length);
     
-    // 保存完成的工具调用
-    this.completedToolCalls = [...this.completedToolCalls, ...completedCalls];
-    this.waitingForToolCompletion = false;
+    // 打印新完成的工具调用详情
+    for (const call of completedCalls) {
+      console.log(`新完成工具: callId=${call.request.callId}, name=${call.request.name}, status=${call.status}`);
+    }
     
-    // 清理待处理的工具调用
+    // 增量保存完成的工具调用
+    this.completedToolCalls.push(...completedCalls);
+    console.log('保存后已完成工具调用数量:', this.completedToolCalls.length);
+
+    // 更新待处理的工具调用集合
     for (const call of completedCalls) {
       this.pendingToolCalls.delete(call.request.callId);
     }
+
+    // 仍有待处理工具则继续等待
+    this.waitingForToolCompletion = this.pendingToolCalls.size > 0;
   }
 
   private async waitForToolCompletion(): Promise<void> {
@@ -244,51 +257,78 @@ export class ChatHandler {
       throw createError(ErrorCode.TURN_NOT_INITIALIZED);
     }
 
-    // 构建工具结果作为新的消息部分
-    const toolResultParts = this.completedToolCalls.map(call => {
+    console.log('开始构建工具结果，待处理工具调用:', this.completedToolCalls.length);
+
+    // 关键修复：确保为每个工具调用都构建正确的响应
+    const toolResultParts = [];
+    
+    for (const call of this.completedToolCalls) {
+      console.log(`构建工具结果 - callId: ${call.request.callId}, status: ${call.status}`);
+      
       if (call.status === 'success' && call.response) {
-        return call.response.responseParts;
-      } else if (call.status === 'error') {
-        return {
+        // 成功的工具调用
+        const responseParts = call.response.responseParts;
+        if (Array.isArray(responseParts)) {
+          toolResultParts.push(...responseParts);
+        } else {
+          toolResultParts.push(responseParts);
+        }
+      } else {
+        // 失败的工具调用 - 必须构建错误响应
+        const errorResponse = {
           functionResponse: {
-            id: call.request.callId,
             name: call.request.name,
-            response: { error: call.response?.error?.message || 'Tool execution failed' }
+            response: { 
+              error: call.response?.error?.message || `Tool execution failed with status: ${call.status}` 
+            }
           }
         };
+        toolResultParts.push(errorResponse);
+        console.log(`为失败的工具调用构建错误响应:`, errorResponse);
       }
-      return null;
-    }).filter((part): part is any => part !== null).flat();
-
-    // 确保 toolResultParts 是 Part[] 格式
-    const parts = toolResultParts.map(part => {
-      if (typeof part === 'string') {
-        return { text: part };
-      }
-      return part;
-    });
-
-    console.log('发送工具结果到 Gemini:', parts.length, '个部分');
-
-    // 直接将工具结果添加到聊天历史，而不是创建新的 Turn
-    const container = configFactory.getCurrentWorkspaceContainer();
-    const chat = container.geminiClient?.getChat();
-    if (chat) {
-      // 将工具结果添加到聊天历史
-      chat.addHistory({
-        role: 'user',
-        parts: parts
-      });
-      
-      // 发送完成事件，结束对话
-      this.streamingEventService.sendCompleteEvent(res);
     }
+
+    console.log(`发送工具结果到 Gemini: ${toolResultParts.length} 个部分，对应 ${this.completedToolCalls.length} 个工具调用`);
+
+    this.resetState();
+
+    // 关键修复：发送工具结果给Gemini并等待回复，而不是直接结束对话
+    try {
+      // 处理工具结果的流式响应
+      await this.processStreamEvents(toolResultParts, res);
+      
+      // 继续处理可能的新工具调用
+      await this.processToolCallResults(res);
+      
+    } catch (error) {
+      console.error('❌ 处理工具结果时出错:', error);
+      
+      // 如果是Gemini API错误，尝试提取详细信息
+      if (error instanceof Error) {
+        console.error('❌ 错误详情:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
+      
+      this.streamingEventService.sendErrorEvent(
+        res,
+        error instanceof Error ? error.message : 'Unknown error',
+        ErrorCode.STREAM_ERROR
+      );
+    }
+
   }
 
   private resetState(): void {
+    console.log('重置ChatHandler状态');
+    console.log(`清理前状态: pendingToolCalls=${this.pendingToolCalls.size}, completedToolCalls=${this.completedToolCalls.length}`);
+    
     this.pendingToolCalls.clear();
     this.completedToolCalls = [];
     this.waitingForToolCompletion = false;
+    
+    console.log('状态已重置');
   }
 
   private buildFullMessage(message: string, filePaths: string[]): string {
