@@ -11,6 +11,7 @@ import { AuthConfigManager } from './AuthConfigManager.js';
 import { OAuthManager } from './OAuthManager.js';
 import { AuthValidator } from './AuthValidator.js';
 import { DEFAULT_GEMINI_FLASH_MODEL } from '../../config/models.js';
+import { Config } from '../../config/config.js';
 
 /**
  * 认证服务 - 主要协调器
@@ -40,6 +41,13 @@ export class AuthService {
 
     // 立即尝试恢复认证状态（修复重启问题）
     this.initializeAuthState();
+  }
+
+  /**
+   * 设置配置对象
+   */
+  public setConfig(config: Config): void {
+    this.oauthManager.setConfig(config);
   }
 
   /**

@@ -9,6 +9,7 @@ import path from 'path';
 import os from 'os';
 import { getOauthClient, clearCachedCredentialFile } from '../../code_assist/oauth2.js';
 import { AuthType } from '../../core/contentGenerator.js';
+import { Config } from '../../config/config.js';
 
 /**
  * OAuth管理器 - 负责OAuth凭据的验证和管理
@@ -20,9 +21,18 @@ import { AuthType } from '../../core/contentGenerator.js';
  */
 export class OAuthManager {
   private readonly oauthCredsPath: string;
+  private config: Config | null = null;
 
-  constructor() {
+  constructor(config?: Config) {
     this.oauthCredsPath = path.join(os.homedir(), '.gemini', 'oauth_creds.json');
+    this.config = config || null;
+  }
+
+  /**
+   * 设置配置对象
+   */
+  public setConfig(config: Config): void {
+    this.config = config;
   }
 
   /**
@@ -81,7 +91,10 @@ export class OAuthManager {
       // OAuth2Client会自动处理令牌刷新逻辑
       try {
         console.log('尝试初始化OAuth客户端（会自动处理令牌刷新）...');
-        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE);
+        if (!this.config) {
+          throw new Error('Config 对象未设置，无法初始化 OAuth 客户端');
+        }
+        await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, this.config);
         console.log('✅ OAuth凭据验证成功');
         return true;
       } catch (oauthError) {
@@ -107,12 +120,16 @@ export class OAuthManager {
   public async initializeOAuthClient(timeoutMs: number = 60000): Promise<void> {
     console.log('启动OAuth客户端初始化...');
 
+    if (!this.config) {
+      throw new Error('Config 对象未设置，无法初始化 OAuth 客户端');
+    }
+
     // 设置超时时间
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('OAuth 初始化超时')), timeoutMs);
     });
     
-    const oauthPromise = getOauthClient(AuthType.LOGIN_WITH_GOOGLE);
+    const oauthPromise = getOauthClient(AuthType.LOGIN_WITH_GOOGLE, this.config);
     
     await Promise.race([oauthPromise, timeoutPromise]);
     console.log('OAuth客户端初始化成功');
