@@ -6,9 +6,10 @@
 //
 
 import SwiftUI
+import Factory
 
 struct FileExplorerView: View {
-    @EnvironmentObject var fileExplorerService: FileExplorerService
+    @ObservedObject private var fileExplorerService = Container.shared.fileExplorerService.resolve()
     @State private var searchText = ""
     
     var body: some View {

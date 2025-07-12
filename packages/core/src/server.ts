@@ -161,6 +161,14 @@ export class APIServer {
     app.post('/execute-command', (req, res) => {
       this.commandService.executeCommand(req, res);
     });
+
+    // 模型管理
+    app.get('/model/status', (req, res) => {
+      this.geminiService.handleModelStatus(req, res);
+    });
+    app.post('/model/switch', (req, res) => {
+      this.geminiService.handleModelSwitch(req, res);
+    });
   }
 
   public start() {
@@ -174,6 +182,7 @@ export class APIServer {
       console.log(`💬 Chat endpoint: http://localhost:${port}/chat`);
       console.log(`📂 File operations: http://localhost:${port}/list-directory`);
       console.log(`⚡ Command execution: http://localhost:${port}/execute-command`);
+      console.log(`🤖 Model management: http://localhost:${port}/model/status | http://localhost:${port}/model/switch`);
       console.log(`🏭 ConfigFactory: ${configFactory.isFactoryInitialized() ? 'initialized' : 'uninitialized'}`);
       
       // 初始化全局AuthService，但不设置Config（等待第一次请求）

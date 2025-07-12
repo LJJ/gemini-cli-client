@@ -473,7 +473,130 @@ interface ExecuteCommandResponse extends BaseResponse {
 }
 ```
 
-## 错误处理
+## 6. 模型管理
+
+### GET /model/status
+
+**描述**: 查询当前模型状态和可用性
+
+**请求**: 无参数
+
+**响应**:
+```typescript
+interface ModelStatusResponse extends BaseResponse {
+  message: string;                       // 响应消息
+  currentModel: string;                  // 当前使用的模型名称
+  supportedModels: string[];             // 支持的模型列表
+  modelStatuses: Array<{                 // 所有模型的状态信息
+    name: string;                        // 模型名称
+    available: boolean;                  // 是否可用
+    status: 'available' | 'unavailable' | 'unknown';  // 状态
+    message: string;                     // 状态描述
+  }>;
+}
+```
+
+**示例**:
+```json
+{
+  "success": true,
+  "message": "模型状态查询成功",
+  "currentModel": "gemini-2.5-pro",
+  "supportedModels": [
+    "gemini-2.5-pro",
+    "gemini-2.5-flash"
+  ],
+  "modelStatuses": [
+    {
+      "name": "gemini-2.5-pro",
+      "available": true,
+      "status": "available",
+      "message": "Pro model is available"
+    },
+    {
+      "name": "gemini-2.5-flash",
+      "available": true,
+      "status": "available",
+      "message": "Flash model is always available"
+    }
+  ],
+  "timestamp": "2025-01-20T10:30:00.000Z"
+}
+```
+
+### POST /model/switch
+
+**描述**: 切换到指定模型
+
+**请求**:
+```typescript
+interface ModelSwitchRequest {
+  model: string;            // 目标模型名称
+}
+```
+
+**支持的模型**:
+- `gemini-2.5-pro`
+- `gemini-2.5-flash`
+
+**响应**:
+```typescript
+interface ModelSwitchResponse extends BaseResponse {
+  message: string;                       // 响应消息
+  model: {
+    name: string;                        // 新模型名称
+    previousModel: string;               // 之前的模型名称
+    switched: boolean;                   // 是否实际切换了
+    available?: boolean;                 // 新模型是否可用
+    status?: 'available' | 'unavailable' | 'unknown';  // 新模型状态
+    availabilityMessage?: string;        // 可用性消息
+  };
+}
+```
+
+**示例**:
+```json
+{
+  "success": true,
+  "message": "Model switched successfully from gemini-2.5-pro to gemini-2.5-flash",
+  "model": {
+    "name": "gemini-2.5-flash",
+    "previousModel": "gemini-2.5-pro",
+    "switched": true,
+    "available": true,
+    "status": "available",
+    "availabilityMessage": "Flash model is always available"
+  },
+  "timestamp": "2025-01-20T10:30:00.000Z"
+}
+```
+
+**错误情况**:
+- 如果请求相同模型：
+```json
+{
+  "success": true,
+  "message": "Already using model: gemini-2.5-pro",
+  "model": {
+    "name": "gemini-2.5-pro",
+    "previousModel": "gemini-2.5-pro",
+    "switched": false
+  },
+  "timestamp": "2025-01-20T10:30:00.000Z"
+}
+```
+
+- 如果模型名称无效：
+```json
+{
+  "success": false,
+  "error": "Validation Error",
+  "message": "model: Invalid model name. Valid models: gemini-2.5-pro, gemini-2.5-flash",
+  "timestamp": "2025-01-20T10:30:00.000Z"
+}
+```
+
+## 7. 错误处理
 
 所有 API 在发生错误时都返回统一的错误格式：
 
@@ -503,11 +626,17 @@ interface ErrorResponse extends BaseResponse {
 }
 ```
 
-## 注意事项
+## 8. 注意事项
 
 1. **时间戳格式**: 所有时间戳都使用 ISO 8601 格式
 2. **字符编码**: 所有文本内容都使用 UTF-8 编码
 3. **跨域支持**: API 支持 CORS，允许跨域请求
 4. **流式响应**: 聊天 API 支持流式响应，使用 Server-Sent Events 格式
 5. **工具调用**: 聊天 API 支持工具调用，包括文件操作和命令执行
-6. **认证持久化**: 认证配置会在服务器重启后保持 
+6. **认证持久化**: 认证配置会在服务器重启后保持
+7. **模型管理**: 
+   - Flash 模型（`gemini-2.5-flash`）始终可用
+   - Pro 模型（`gemini-2.5-pro`）的可用性取决于配额限制
+   - 只有在使用 API Key 认证时才能准确检查 Pro 模型的可用性
+   - 使用 OAuth 认证时，Pro 模型的可用性状态为 `unknown`
+   - 模型切换不需要重新初始化服务，会立即生效 

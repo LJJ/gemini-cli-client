@@ -112,6 +112,42 @@ export class ResponseFactory {
   }
 
   /**
+   * 创建模型状态响应
+   */
+  static modelStatus(data: {
+    currentModel: string;
+    supportedModels: string[];
+    modelStatuses: Array<{
+      name: string;
+      available: boolean;
+      status: 'available' | 'unavailable' | 'unknown';
+      message: string;
+    }>;
+  }) {
+    return this.success({
+      message: '模型状态查询成功',
+      ...data
+    });
+  }
+
+  /**
+   * 创建模型切换响应
+   */
+  static modelSwitch(model: {
+    name: string;
+    previousModel: string;
+    switched: boolean;
+    available?: boolean;
+    status?: 'available' | 'unavailable' | 'unknown';
+    availabilityMessage?: string;
+  }, message: string) {
+    return this.success({
+      message,
+      model
+    });
+  }
+
+  /**
    * 创建参数验证错误响应
    */
   static validationError(field: string, message: string) {

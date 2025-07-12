@@ -8,18 +8,15 @@
 import SwiftUI
 import Factory
 
-struct ContentView: View {
-    @StateObject private var chatService = ChatService()
-    @StateObject private var fileExplorerService = FileExplorerService()
-    @State private var messageText = ""
-    @FocusState private var isTextFieldFocused: Bool
+struct MainView: View {
+    @ObservedObject private var chatService = Container.shared.chatService.resolve()
+    @ObservedObject private var fileExplorerService = Container.shared.fileExplorerService.resolve()
     @StateObject private var authService = Container.shared.authService.resolve()
     
     var body: some View {
         HSplitView {
             // 文件浏览器
             FileExplorerView()
-                .environmentObject(fileExplorerService)
                 .frame(minWidth: 200, maxWidth: 400)
             
             // 聊天界面
@@ -77,28 +74,7 @@ struct ContentView: View {
                 }
                 
                 // 输入区域
-                VStack(spacing: 8) {
-                    HStack(spacing: 12) {
-                        TextField("输入消息...", text: $messageText, axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
-                            .focused($isTextFieldFocused)
-                            .lineLimit(1...5)
-                            .onSubmit {
-                                sendMessage()
-                            }
-                        
-                        Button(action: sendMessage) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .secondary : .blue)
-                        }
-                        .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || chatService.isLoading)
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(NSColor.controlBackgroundColor))
+                MessageInputView()
             }
         }
         .frame(minWidth: 650, minHeight: 500)
@@ -133,24 +109,8 @@ struct ContentView: View {
             }
         }
     }
-    
-    private func sendMessage() {
-        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        
-        messageText = ""
-        isTextFieldFocused = false
-        
-        Task {
-            // 获取选中的文件路径
-            let selectedFilePaths = Array(fileExplorerService.selectedFiles)
-            
-            // 发送消息（包含文件路径和工作目录）
-            await chatService.sendMessage(text, filePaths: selectedFilePaths, workspacePath: fileExplorerService.currentPath)
-        }
-    }
 }
 
 #Preview {
-    ContentView()
+    MainView()
 }
